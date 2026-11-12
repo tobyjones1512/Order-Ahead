@@ -41,6 +41,10 @@
       "destination": "/admin/index.html"
     },
     {
+      "source": "/",
+      "destination": "/app-shell/index.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index"
     }
