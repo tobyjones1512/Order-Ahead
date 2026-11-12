@@ -41,12 +41,12 @@ h1,h2,h3{font-family:var(--dot);font-weight:900;margin:0;text-wrap:balance}
 tabular,.num{font-variant-numeric:tabular-nums}
 
 /* header */
-header.top{display:flex;align-items:center;gap:24px;padding:clamp(34px,6vw,64px) 0 clamp(28px,5vw,56px);position:relative}
-.brand{font:900 clamp(44px,6vw,64px)/1 var(--dot);letter-spacing:.02em;text-decoration:none}
-.top nav{display:flex;gap:10px 34px;margin-left:auto;align-items:center;font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+header.top{display:flex;align-items:center;gap:20px;padding:18px 0;position:relative;flex-wrap:wrap}
+.brand{font:900 34px/1 var(--dot);letter-spacing:.02em;text-decoration:none}
+.top nav{display:flex;gap:6px 20px;margin-left:auto;align-items:center;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .top nav a,.top nav button{background:none;border:0;padding:10px 2px;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:none;cursor:pointer;border-bottom:2px dashed transparent}
 .top nav a:hover,.top nav button:hover,.top nav button[aria-expanded=true]{border-bottom-color:currentColor}
-.pop{position:absolute;right:0;top:calc(100% - clamp(14px,3vw,34px));width:min(420px,100%);max-height:min(70vh,520px);overflow:auto;z-index:5;background:var(--paper);color:var(--ink);padding:20px 22px 18px;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 14px 18px rgba(20,22,27,.28));text-transform:none;letter-spacing:0;font-weight:400}
+.pop{position:absolute;right:0;top:calc(100% - 4px);width:min(420px,100%);max-height:min(70vh,520px);overflow:auto;z-index:5;background:var(--paper);color:var(--ink);padding:20px 22px 18px;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 14px 18px rgba(20,22,27,.28));text-transform:none;letter-spacing:0;font-weight:400}
 .pop h2{font-size:28px;margin:0 0 4px}
 .pop .sub{font-size:13px;color:var(--sub);margin:0 0 12px}
 .pop ul{list-style:none;margin:0;padding:0}
@@ -85,8 +85,8 @@ header.top{display:flex;align-items:center;gap:24px;padding:clamp(34px,6vw,64px)
 .list span{color:var(--sub);font-size:14px}
 
 /* hero */
-.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(28px,5vw,72px);align-items:center;padding:clamp(28px,6vw,72px) 0 clamp(40px,7vw,96px)}
-.hero h1{font-size:clamp(46px,8.2vw,96px);line-height:.95;letter-spacing:.005em;margin:0 0 22px}
+.hero{display:grid;grid-template-columns:1.7fr 1fr;gap:clamp(28px,4vw,56px);align-items:center;padding:clamp(28px,6vw,72px) 0 clamp(40px,7vw,96px)}
+.hero h1{font-size:clamp(40px,6.4vw,84px);line-height:.98;letter-spacing:.005em;margin:0 0 22px;text-wrap:wrap}
 .hero p{font-size:clamp(16px,1.6vw,19px);max-width:46ch;margin:0 0 28px;color:var(--text)}
 .hero .fine{font-size:13px;color:var(--gsub);margin:18px 0 0}
 .demo{max-width:380px;justify-self:center;width:100%;transform:rotate(1.6deg);animation:print 1.5s steps(14,end) .15s backwards}
@@ -113,8 +113,7 @@ section{padding:clamp(28px,5vw,56px) 0}
 .cta h2{font-size:clamp(34px,5vw,56px);line-height:1;max-width:14ch}
 footer{padding:36px 0 64px;font-size:13px;color:var(--gsub);border-top:1px dashed var(--rule);margin-top:40px}
 footer .wrap{display:flex;gap:10px 28px;flex-wrap:wrap;justify-content:space-between}
-footer nav{display:flex;gap:10px;flex-wrap:wrap}
-footer .btn{padding:10px 16px;font-size:12px}
+footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
 footer p{margin:0}
 
 @media(max-width:860px){
@@ -271,7 +270,7 @@ footer p{margin:0}
 
     <section>
       <div class="cta">
-        <h2>Hungry, or open for business?</h2>
+        <h2>Hungry?</h2>
         <div class="btns">
           <a class="btn" href="https://app.placemyorder.online/">Order from a café</a>
         </div>
@@ -283,8 +282,8 @@ footer p{margin:0}
   <div class="wrap">
     <p>Docket is run by Toby Jones T/A The Caffeine Media Company.</p>
     <nav aria-label="Footer">
-      <a class="btn btn--sm" href="https://merchant.placemyorder.online/">Merchants</a>
-      <a class="btn btn--sm sec" href="https://app.placemyorder.online/terms/">Merchant Terms</a>
+      <a href="https://merchant.placemyorder.online/">Merchants</a>
+      <a href="https://app.placemyorder.online/terms/">Merchant Terms</a>
     </nav>
   </div>
 </footer>
