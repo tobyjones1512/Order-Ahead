@@ -42,6 +42,36 @@
     },
     {
       "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "sandbox.placemyorder.online"
+        }
+      ],
+      "destination": "/site/index.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "sandbox-merchant.placemyorder.online"
+        }
+      ],
+      "destination": "/m/index.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "sandbox-admin.placemyorder.online"
+        }
+      ],
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/",
       "destination": "/app-shell/index.html"
     },
     {

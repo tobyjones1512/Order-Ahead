@@ -14,6 +14,8 @@ import * as D from '../lib/desk.js';
 const { BASE_URL, SESSION_SECRET, VAPID_PUBLIC_KEY } = process.env;
 // Three sites share this one deployment: customers (BASE_URL = app.placemyorder.online), cafés (MERCHANT_URL) and the owner (ADMIN_URL). Unset = path-based (/m/, /admin/) on BASE_URL.
 const MURL = (process.env.MERCHANT_URL || BASE_URL + '/m').replace(/\/$/, ''), AURL = (process.env.ADMIN_URL || BASE_URL + '/admin').replace(/\/$/, '');
+const CP = process.env.COOKIE_PREFIX || ''; // sandbox sets e.g. 'sbx_' so its cookies never clash with production's
+const SANDBOX = !!process.env.SANDBOX;
 const CK = process.env.COOKIE_DOMAIN ? `; Domain=${process.env.COOKIE_DOMAIN}` : ''; // e.g. .placemyorder.online so a café signed in on merchant.* is also signed in on admin.*
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
 const str = (s, n) => String(s ?? '').trim().slice(0, n);
@@ -31,15 +33,15 @@ function verify(s) {
   const o = JSON.parse(Buffer.from(b, 'base64url')); return o.exp > Date.now() ? o : null;
 }
 const cookie = (req, k) => (req.headers.cookie || '').split('; ').map((c) => c.split('=')).find(([n]) => n === k)?.[1];
-const setSession = (res, id) => res.setHeader('Set-Cookie', `sid=${id ? sign({ m: id, exp: Date.now() + 30 * 864e5 }) : ''}; HttpOnly; Secure; SameSite=Lax; Path=/${CK}; Max-Age=${id ? 2592000 : 0}`);
+const setSession = (res, id) => res.setHeader('Set-Cookie', `${CP}sid=${id ? sign({ m: id, exp: Date.now() + 30 * 864e5 }) : ''}; HttpOnly; Secure; SameSite=Lax; Path=/${CK}; Max-Age=${id ? 2592000 : 0}`);
 
 // Customer accounts: email + 6-digit emailed code -> signed 'cid' cookie. Favourites and loyalty stamps belong to the account email.
-const who = (req) => verify(cookie(req, 'cid'))?.c || null;
-const setCust = (res, email) => res.setHeader('Set-Cookie', `cid=${email ? sign({ c: email, exp: Date.now() + 365 * 864e5 }) : ''}; HttpOnly; Secure; SameSite=Lax; Path=/${CK}; Max-Age=${email ? 31536000 : 0}`);
+const who = (req) => verify(cookie(req, CP + 'cid'))?.c || null;
+const setCust = (res, email) => res.setHeader('Set-Cookie', `${CP}cid=${email ? sign({ c: email, exp: Date.now() + 365 * 864e5 }) : ''}; HttpOnly; Secure; SameSite=Lax; Path=/${CK}; Max-Age=${email ? 31536000 : 0}`);
 
 // ---------- helpers ----------
 const merchantById = async (id) => (await sql`select * from merchants where id=${id}`)[0];
-const viewer = (req) => verify(cookie(req, 'sid'))?.m; // signed-in café (same browser can also use the customer app)
+const viewer = (req) => verify(cookie(req, CP + 'sid'))?.m; // signed-in café (same browser can also use the customer app)
 const isTest = (m, req) => !!m.test_mode && viewer(req) === m.id; // test mode: this café's own session sees its store and places fake orders
 async function connected(id, req) {
   const m = (await sql`select * from merchants where id=${+id || 0}`)[0];
@@ -261,7 +263,7 @@ export default async function handler(req, res) {
     for (const [method, re, keys, fn, auth] of routes) {
       const hit = method === req.method && re.exec(url.pathname); if (!hit) continue;
       const ctx = { req, res, who: () => who(req), q: url.searchParams, body: req.body || {}, p: Object.fromEntries(keys.map((k, i) => [k, decodeURIComponent(hit[i + 1])])) };
-      if (auth && !(ctx.m = verify(cookie(req, 'sid'))?.m)) return json(res, 401, { error: 'Please sign in' });
+      if (auth && !(ctx.m = verify(cookie(req, CP + 'sid'))?.m)) return json(res, 401, { error: 'Please sign in' });
       const out = await fn(ctx);
       return res.writableEnded ? undefined : json(res, 200, out ?? { ok: true });
     }
@@ -279,7 +281,7 @@ route('GET', '/.well-known/apple-developer-merchantid-domain-association', ({ re
   if (!process.env.APPLE_PAY_DOMAIN_FILE) throw bad('Not configured', 404);
   res.setHeader('Content-Type', 'text/plain'); res.end(process.env.APPLE_PAY_DOMAIN_FILE);
 });
-route('GET', '/api/config', () => ({ vapid: VAPID_PUBLIC_KEY, appUrl: BASE_URL, merchantUrl: MURL, adminUrl: AURL }));
+route('GET', '/api/config', () => ({ vapid: VAPID_PUBLIC_KEY, appUrl: BASE_URL, merchantUrl: MURL, adminUrl: AURL, sandbox: SANDBOX }));
 
 route('GET', '/api/cafes', async ({ q }) => {
   const [lat, lng] = [parseFloat(q.get('lat')), parseFloat(q.get('lng'))];
@@ -957,9 +959,11 @@ route('POST', '/api/m/items', async ({ m, body: b }) => {
   })).filter((g) => g.name && g.choices.length);
   const cat = (await sql`select id from categories where id=${+b.category_id} and merchant_id=${m}`)[0];
   if (!cat) throw bad('Pick a category');
-  const row = [name, str(b.description, 200), price, b.available !== false, JSON.stringify(opts), cat.id, JSON.stringify(cleanAllergens(b.allergens)), JSON.stringify(cleanDietary(b.dietary))];
-  if (b.id) await sql`update items set name=${row[0]},description=${row[1]},price_pence=${row[2]},available=${row[3]},options=${row[4]}::jsonb,category_id=${row[5]},allergens=${row[6]}::jsonb,dietary=${row[7]}::jsonb where id=${+b.id} and merchant_id=${m}`;
-  else await sql`insert into items (merchant_id,name,description,price_pence,available,options,category_id,allergens,dietary) values (${m},${row[0]},${row[1]},${row[2]},${row[3]},${row[4]}::jsonb,${row[5]},${row[6]}::jsonb,${row[7]}::jsonb)`;
+  const al = cleanAllergens(b.allergens), none = !al.length && b.no_allergens === true;
+  if (!al.length && !none) throw bad('Declare allergens: tick what the item contains, or choose “No allergens”');
+  const row = [name, str(b.description, 200), price, b.available !== false, JSON.stringify(opts), cat.id, JSON.stringify(al), JSON.stringify(cleanDietary(b.dietary))];
+  if (b.id) await sql`update items set name=${row[0]},description=${row[1]},price_pence=${row[2]},available=${row[3]},options=${row[4]}::jsonb,category_id=${row[5]},allergens=${row[6]}::jsonb,dietary=${row[7]}::jsonb,no_allergens=${none} where id=${+b.id} and merchant_id=${m}`;
+  else await sql`insert into items (merchant_id,name,description,price_pence,available,options,category_id,allergens,dietary,no_allergens) values (${m},${row[0]},${row[1]},${row[2]},${row[3]},${row[4]}::jsonb,${row[5]},${row[6]}::jsonb,${row[7]}::jsonb,${none})`;
 }, true);
 route('DELETE', '/api/m/items/:id', async ({ m, p }) => { await sql`delete from items where id=${+p.id} and merchant_id=${m}`; }, true);
 
