@@ -41,11 +41,20 @@ h1,h2,h3{font-family:var(--dot);font-weight:900;margin:0;text-wrap:balance}
 tabular,.num{font-variant-numeric:tabular-nums}
 
 /* header */
-header.top{display:flex;align-items:center;gap:20px;padding:18px 0;flex-wrap:wrap}
-.brand{font:900 34px/1 var(--dot);letter-spacing:.02em;text-decoration:none}
-.top nav{display:flex;gap:6px 20px;margin-left:auto;flex-wrap:wrap;align-items:center;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-.top nav a{text-decoration:none;padding:8px 2px;border-bottom:1px dashed transparent}
-.top nav a:hover{border-bottom-color:currentColor}
+header.top{display:flex;align-items:center;gap:24px;padding:clamp(34px,6vw,64px) 0 clamp(28px,5vw,56px);position:relative}
+.brand{font:900 clamp(44px,6vw,64px)/1 var(--dot);letter-spacing:.02em;text-decoration:none}
+.top nav{display:flex;gap:10px 34px;margin-left:auto;align-items:center;font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.top nav a,.top nav button{background:none;border:0;padding:10px 2px;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:none;cursor:pointer;border-bottom:2px dashed transparent}
+.top nav a:hover,.top nav button:hover,.top nav button[aria-expanded=true]{border-bottom-color:currentColor}
+.pop{position:absolute;right:0;top:calc(100% - clamp(14px,3vw,34px));width:min(420px,100%);max-height:min(70vh,520px);overflow:auto;z-index:5;background:var(--paper);color:var(--ink);padding:20px 22px 18px;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 14px 18px rgba(20,22,27,.28));text-transform:none;letter-spacing:0;font-weight:400}
+.pop h2{font-size:28px;margin:0 0 4px}
+.pop .sub{font-size:13px;color:var(--sub);margin:0 0 12px}
+.pop ul{list-style:none;margin:0;padding:0}
+.pop li a{display:block;padding:11px 0;border-top:1px dashed var(--rule);text-decoration:none}
+.pop li a:hover b{color:var(--accent)}
+.pop li b{display:block;font-size:15px}.pop li span{font-size:13px;color:var(--sub)}
+.pop .none{padding:8px 0;color:var(--sub)}
+.pop[hidden]{display:none}
 
 /* buttons (the app's own) */
 .btn{display:inline-block;padding:15px 22px;border-radius:12px;background:var(--accent);color:var(--on-accent);font:700 14px/1.25 var(--mono);letter-spacing:.08em;text-transform:uppercase;text-decoration:none;text-align:center;border:2px solid var(--accent);transition:transform .12s var(--ease)}
@@ -104,7 +113,8 @@ section{padding:clamp(28px,5vw,56px) 0}
 .cta h2{font-size:clamp(34px,5vw,56px);line-height:1;max-width:14ch}
 footer{padding:36px 0 64px;font-size:13px;color:var(--gsub);border-top:1px dashed var(--rule);margin-top:40px}
 footer .wrap{display:flex;gap:10px 28px;flex-wrap:wrap;justify-content:space-between}
-footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
+footer nav{display:flex;gap:10px;flex-wrap:wrap}
+footer .btn{padding:10px 16px;font-size:12px}
 footer p{margin:0}
 
 @media(max-width:860px){
@@ -113,7 +123,7 @@ footer p{margin:0}
   .top nav{margin-left:0;width:100%}
 }
 @media(prefers-reduced-motion:reduce){.demo{animation:none}html{scroll-behavior:auto}.btn{transition:none}}
-@media print{.top nav,.btns{display:none}}
+@media print{.top nav,.btns,.pop{display:none}}
 </style>
 </head>
 <body>
@@ -122,11 +132,14 @@ footer p{margin:0}
   <header class="top">
     <a class="brand" href="/" aria-label="Docket home">Docket</a>
     <nav aria-label="Main">
-      <a href="#customers">Customers</a>
-      <a href="#cafes">Cafés</a>
-      <a href="#fees">Fees</a>
-      <a href="https://merchant.placemyorder.online/">Café sign in</a>
+      <a href="https://app.placemyorder.online/">Order</a>
+      <button type="button" id="loc" aria-expanded="false" aria-controls="pop" aria-haspopup="dialog">Locations</button>
     </nav>
+    <div class="pop" id="pop" role="dialog" aria-label="Locations" hidden>
+      <h2>Locations</h2>
+      <p class="sub">Cafés you can order from right now.</p>
+      <ul id="cafes-list"><li class="none">Loading…</li></ul>
+    </div>
   </header>
 
   <main id="main">
@@ -136,12 +149,11 @@ footer p{margin:0}
         <p>Docket is how independent UK cafés take pre-orders. Pick your drink on your phone, pay, and collect it without the queue. Cafés keep their own branding, and see every order on a kitchen screen they can hear from the other side of the counter.</p>
         <div class="btns">
           <a class="btn" href="https://app.placemyorder.online/">Order from a café</a>
-          <a class="btn sec" href="https://merchant.placemyorder.online/">Open your café</a>
         </div>
         <p class="fine">No download needed. Open it in your browser and add it to your Home Screen if you like.</p>
       </div>
-      <div class="docket demo" role="img" aria-label="A sample order docket: order 42 from a sample café, one flat white and one cheese toastie, total £9.03, marked ready">
-        <div class="band">Sample Café</div>
+      <div class="docket demo" role="img" aria-label="A sample order docket: order 42 from Ember &amp; Oak, one flat white and one cheese toastie, total £9.03, marked ready">
+        <div class="band">Ember &amp; Oak</div>
         <div class="stampwrap"><span class="stamp g">Ready</span></div>
         <div class="sub">Your order</div>
         <div class="no">#042</div>
@@ -151,7 +163,7 @@ footer p{margin:0}
         <div class="lead"><span>Tip, 5%</span><b>£0.43</b></div>
         <div class="lead tot"><span>Total</span><b>£9.03</b></div>
         <p class="sub" style="margin:14px 0 0">Collect from the counter. Ready around 08:25.</p>
-        <div class="tiny">SAMPLE ORDER · NOT A REAL CAFÉ</div>
+        <div class="tiny">EXAMPLE ORDER</div>
       </div>
     </div>
 
@@ -262,7 +274,6 @@ footer p{margin:0}
         <h2>Hungry, or open for business?</h2>
         <div class="btns">
           <a class="btn" href="https://app.placemyorder.online/">Order from a café</a>
-          <a class="btn sec" href="https://merchant.placemyorder.online/">Open your café</a>
         </div>
       </div>
     </section>
@@ -272,12 +283,29 @@ footer p{margin:0}
   <div class="wrap">
     <p>Docket is run by Toby Jones T/A The Caffeine Media Company.</p>
     <nav aria-label="Footer">
-      <a href="https://app.placemyorder.online/">Order</a>
-      <a href="https://merchant.placemyorder.online/">Café sign in</a>
-      <a href="https://app.placemyorder.online/terms/">Merchant Terms</a>
-      <a href="mailto:merchantsupport@placemyorder.online">merchantsupport@placemyorder.online</a>
+      <a class="btn btn--sm" href="https://merchant.placemyorder.online/">Merchants</a>
+      <a class="btn btn--sm sec" href="https://app.placemyorder.online/terms/">Merchant Terms</a>
     </nav>
   </div>
 </footer>
+<script>
+(() => {
+  const b = document.getElementById('loc'), pop = document.getElementById('pop'), ul = document.getElementById('cafes-list');
+  const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let loaded = false;
+  const set = (o) => { pop.hidden = !o; b.setAttribute('aria-expanded', o); if (o && !loaded) load(); };
+  async function load() {
+    loaded = true;
+    try {
+      const r = await fetch('/api/cafes'); if (!r.ok) throw 0;
+      const l = await r.json();
+      ul.innerHTML = l.length ? l.map((c) => `<li><a href="https://app.placemyorder.online/#/c/${encodeURIComponent(c.id)}${c.branchId ? '/' + encodeURIComponent(c.branchId) : ''}"><b>${esc(c.name)}${c.many && c.branch ? ' · ' + esc(c.branch) : ''}</b><span>${esc(c.address || '')}</span></a></li>`).join('') : '<li class="none">No cafés yet. Check back soon.</li>';
+    } catch { loaded = false; ul.innerHTML = '<li class="none">Couldn’t load locations. Try again.</li>'; }
+  }
+  b.onclick = () => set(pop.hidden);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { set(false); b.focus(); } });
+  addEventListener('click', (e) => { if (!pop.hidden && !pop.contains(e.target) && !b.contains(e.target)) set(false); });
+})();
+</script>
 </body>
 </html>
