@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Docket – order ahead from your local café</title>
+<meta name="description" content="Docket lets you order and pay ahead at independent UK cafés, then walk in to a ready drink. Cafés get a loud kitchen screen, their own branding and a flat 5% fee.">
+<meta name="theme-color" content="#CDD3DC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1013" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://placemyorder.online/">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Docket – order ahead from your local café">
+<meta property="og:description" content="Order and pay ahead, then walk in to a ready drink. Built for independent UK cafés.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://placemyorder.online/">
+<meta property="og:image" content="https://placemyorder.online/icon-512.png">
+<link rel="preload" href="/fonts/Doto-900.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Chivo Mono";font-weight:400;font-display:swap;src:url(/fonts/ChivoMono-400.woff2) format("woff2")}
+@font-face{font-family:"Chivo Mono";font-weight:700;font-display:swap;src:url(/fonts/ChivoMono-700.woff2) format("woff2")}
+@font-face{font-family:"Doto";font-weight:900;font-display:swap;src:url(/fonts/Doto-900.woff2) format("woff2")}
+:root{
+  --ground:#CDD3DC;--text:#14161B;--gsub:#3F4550;
+  --paper:#FBFBF8;--ink:#14161B;--sub:#565C69;--rule:rgba(20,22,27,.4);--fill:rgba(20,22,27,.07);
+  --accent:#2B39F0;--on-accent:#fff;--red:#C42F17;--green:#0F6B37;--amber:#8F5200;
+  --mono:"Chivo Mono",ui-monospace,"SF Mono",Menlo,monospace;--dot:"Doto","Chivo Mono",ui-monospace,monospace;
+  --ease:cubic-bezier(.19,1,.22,1);
+}
+@media(prefers-color-scheme:dark){:root{--ground:#0E1013;--text:#ECEDEF;--gsub:#A3A9B5}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{margin:0;background:var(--ground);color:var(--text);font:400 16px/1.55 var(--mono);-webkit-font-smoothing:antialiased;text-wrap:pretty}
+::selection{background:var(--accent);color:var(--on-accent)}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
+a{color:inherit;text-underline-offset:.2em}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--paper);color:var(--ink);padding:10px 14px;z-index:9}.skip:focus{left:8px}
+h1,h2,h3{font-family:var(--dot);font-weight:900;margin:0;text-wrap:balance}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+tabular,.num{font-variant-numeric:tabular-nums}
+
+/* header */
+header.top{display:flex;align-items:center;gap:20px;padding:18px 0;flex-wrap:wrap}
+.brand{font:900 34px/1 var(--dot);letter-spacing:.02em;text-decoration:none}
+.top nav{display:flex;gap:6px 20px;margin-left:auto;flex-wrap:wrap;align-items:center;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.top nav a{text-decoration:none;padding:8px 2px;border-bottom:1px dashed transparent}
+.top nav a:hover{border-bottom-color:currentColor}
+
+/* buttons (the app's own) */
+.btn{display:inline-block;padding:15px 22px;border-radius:12px;background:var(--accent);color:var(--on-accent);font:700 14px/1.25 var(--mono);letter-spacing:.08em;text-transform:uppercase;text-decoration:none;text-align:center;border:2px solid var(--accent);transition:transform .12s var(--ease)}
+.btn:active{transform:translateY(2px) scale(.99)}
+.btn.sec{background:transparent;color:inherit;border-color:currentColor}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+
+/* dockets */
+.docket{position:relative;background:var(--paper);color:var(--ink);padding:26px 26px 22px;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 10px 12px rgba(20,22,27,.14));--sub:#3A404B}
+.docket::after{content:"";position:absolute;left:0;right:0;top:100%;height:7px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='7'%3E%3Cpath d='M0 0h14L7 7z' fill='%23FBFBF8'/%3E%3C/svg%3E") repeat-x}
+.docket h2{font-size:clamp(30px,4.4vw,44px);line-height:1.02;margin:0 0 14px}
+.docket h3{font-size:24px;line-height:1.1;margin:22px 0 6px}
+.docket p{margin:0 0 12px}
+.docket .sub{color:var(--sub);font-size:14px}
+.rule{border:0;border-top:1px dashed var(--rule);margin:16px 0}
+.lead{display:flex;align-items:baseline;gap:8px;margin:7px 0}
+.lead::after{content:"";order:1;flex:1;border-bottom:2px dotted var(--rule);transform:translateY(-4px);min-width:16px}
+.lead>span:first-child{order:0}.lead>b,.lead>span:last-child{order:2}
+.lead.tot{border-top:3px double var(--ink);padding-top:10px;margin-top:12px;font-weight:700}
+.lead.tot::after{display:none}.lead.tot>b{margin-left:auto}
+.stamp{display:inline-block;border:3px double var(--sc,var(--red));border-radius:6px;padding:6px 14px;font:900 26px/1 var(--dot);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);transform:rotate(-5deg);mix-blend-mode:multiply}
+.stamp.g{--sc:var(--green)}.stamp.b{--sc:var(--accent)}
+.band{margin:-26px -26px 20px;padding:16px 26px;background:var(--accent);color:var(--on-accent);font:900 30px/1.05 var(--dot);letter-spacing:.02em;text-transform:uppercase}
+.ticket{border-top:10px solid var(--red)}
+.list{list-style:none;margin:0;padding:0}
+.list li{padding:11px 0;border-top:1px dashed var(--rule)}.list li:first-child{border-top:0}
+.list b{display:block}
+.list span{color:var(--sub);font-size:14px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(28px,5vw,72px);align-items:center;padding:clamp(28px,6vw,72px) 0 clamp(40px,7vw,96px)}
+.hero h1{font-size:clamp(46px,8.2vw,96px);line-height:.95;letter-spacing:.005em;margin:0 0 22px}
+.hero p{font-size:clamp(16px,1.6vw,19px);max-width:46ch;margin:0 0 28px;color:var(--text)}
+.hero .fine{font-size:13px;color:var(--gsub);margin:18px 0 0}
+.demo{max-width:380px;justify-self:center;width:100%;transform:rotate(1.6deg);animation:print 1.5s steps(14,end) .15s backwards}
+.demo .no{font:900 clamp(58px,9vw,80px)/1 var(--dot);margin:4px 0 2px}
+.demo .stampwrap{position:absolute;right:14px;top:96px}
+.demo .tiny{font-size:12px;color:var(--sub);margin-top:16px;text-align:center;letter-spacing:.04em}
+@keyframes print{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 -24px 0)}}
+
+/* sections */
+section{padding:clamp(28px,5vw,56px) 0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:start}
+.intro{max-width:52ch;margin:0 0 28px}
+.intro h2{font-size:clamp(34px,5vw,56px);line-height:1;margin-bottom:12px}
+.intro p{color:var(--text);margin:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 32px;margin-top:6px}
+.step{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:10px 0;border-top:1px dashed var(--rule)}
+.step i{font:900 24px/1 var(--dot);font-style:normal}
+.step b{display:block}
+.step span{color:var(--sub);font-size:14px}
+.wide-docket{max-width:760px}
+.fine-print{max-width:70ch;font-size:14px;color:var(--gsub)}
+.fine-print p{margin:0 0 10px}
+.cta{display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between}
+.cta h2{font-size:clamp(34px,5vw,56px);line-height:1;max-width:14ch}
+footer{padding:36px 0 64px;font-size:13px;color:var(--gsub);border-top:1px dashed var(--rule);margin-top:40px}
+footer .wrap{display:flex;gap:10px 28px;flex-wrap:wrap;justify-content:space-between}
+footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
+footer p{margin:0}
+
+@media(max-width:860px){
+  .hero,.two{grid-template-columns:1fr}
+  .demo{transform:none;max-width:420px}
+  .top nav{margin-left:0;width:100%}
+}
+@media(prefers-reduced-motion:reduce){.demo{animation:none}html{scroll-behavior:auto}.btn{transition:none}}
+@media print{.top nav,.btns{display:none}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/" aria-label="Docket home">Docket</a>
+    <nav aria-label="Main">
+      <a href="#customers">Customers</a>
+      <a href="#cafes">Cafés</a>
+      <a href="#fees">Fees</a>
+      <a href="https://merchant.placemyorder.online/">Café sign in</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="hero">
+      <div>
+        <h1>Order ahead. Walk in to a ready drink.</h1>
+        <p>Docket is how independent UK cafés take pre-orders. Pick your drink on your phone, pay, and collect it without the queue. Cafés keep their own branding, and see every order on a kitchen screen they can hear from the other side of the counter.</p>
+        <div class="btns">
+          <a class="btn" href="https://app.placemyorder.online/">Order from a café</a>
+          <a class="btn sec" href="https://merchant.placemyorder.online/">Open your café</a>
+        </div>
+        <p class="fine">No download needed. Open it in your browser and add it to your Home Screen if you like.</p>
+      </div>
+      <div class="docket demo" role="img" aria-label="A sample order docket: order 42 from a sample café, one flat white and one cheese toastie, total £9.03, marked ready">
+        <div class="band">Sample Café</div>
+        <div class="stampwrap"><span class="stamp g">Ready</span></div>
+        <div class="sub">Your order</div>
+        <div class="no">#042</div>
+        <hr class="rule">
+        <div class="lead"><span>1 × Flat white, oat</span><b>£3.40</b></div>
+        <div class="lead"><span>1 × Cheese toastie</span><b>£5.20</b></div>
+        <div class="lead"><span>Tip, 5%</span><b>£0.43</b></div>
+        <div class="lead tot"><span>Total</span><b>£9.03</b></div>
+        <p class="sub" style="margin:14px 0 0">Collect from the counter. Ready around 08:25.</p>
+        <div class="tiny">SAMPLE ORDER · NOT A REAL CAFÉ</div>
+      </div>
+    </div>
+
+    <section id="customers">
+      <div class="intro">
+        <h2>For customers</h2>
+        <p>The whole thing takes about as long as it takes to say your order. No account to create, no app store.</p>
+      </div>
+      <div class="two">
+        <div class="docket">
+          <h3 style="margin-top:0">From menu to counter</h3>
+          <div class="step"><i>1</i><div><b>Choose a café and build your order</b><span>Menus show allergens and dietary tags. Add milk, size and other extras as the café offers them.</span></div></div>
+          <div class="step"><i>2</i><div><b>Pick ASAP or a later time</b><span>You see the earliest pickup the kitchen can really do. Ordering for later? The café is told closer to the time, not hours before.</span></div></div>
+          <div class="step"><i>3</i><div><b>Pay with Apple Pay or card</b><span>Payments are handled by Mollie. You see the exact total before you pay: no service charge is added.</span></div></div>
+          <div class="step"><i>4</i><div><b>Get told when it’s ready</b><span>A notification, an email, or the live order page. iPhone users can track it in Apple Wallet.</span></div></div>
+        </div>
+        <div class="docket">
+          <h3 style="margin-top:0">Little things that help</h3>
+          <ul class="list">
+            <li><b>Sign in only if you want to</b><span>Enter your email and a 6-digit code to keep favourite cafés, favourite orders and loyalty stamps on every device.</span></li>
+            <li><b>Your usual, remembered</b><span>Set defaults such as oat milk or decaf, and they’re picked for you each time.</span></li>
+            <li><b>Allergens that follow you</b><span>Turn on your allergens in Settings and menus flag what to avoid. The café is told with your order.</span></li>
+            <li><b>Loyalty stamps</b><span>Cafés can run a stamp card. It shows as “5/8 Stamps Collected”, with a free drink at the end.</span></li>
+            <li><b>Something wrong?</b><span>Every completed order has a Support button: ask for help, report a problem, or request a refund with photos.</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="cafes">
+      <div class="intro">
+        <h2>For cafés</h2>
+        <p>Take pre-orders and payments without building your own app. Your logo and colours lead inside your menu; Docket stays in the background.</p>
+      </div>
+      <div class="two">
+        <div class="docket ticket">
+          <h3 style="margin-top:0">The kitchen screen</h3>
+          <p>A new order rings a loud chime and keeps nagging until someone accepts it. Tickets read from two metres away on a tablet.</p>
+          <div class="lead"><span>New → Preparing → Ready → Done</span></div>
+          <ul class="list">
+            <li><b>Never miss an order</b><span>Chime, push alerts and optional Star thermal-printer tickets.</span></li>
+            <li><b>Stay in control in a rush</b><span>Pause new orders or add 10 minutes to prep time with one tap, per branch.</span></li>
+            <li><b>Scheduled orders stay quiet</b><span>They appear at pickup time minus your prep time, not at 7am for a 1pm lunch.</span></li>
+            <li><b>Several sites</b><span>Branches have their own hours, addresses and menu availability under one account.</span></li>
+          </ul>
+        </div>
+        <div class="docket">
+          <h3 style="margin-top:0">Set up your way</h3>
+          <ul class="list">
+            <li><b>Your brand, your menu</b><span>Logo, brand colour, categories, options and extras, allergens and dietary tags, special hours.</span></li>
+            <li><b>Offers and loyalty</b><span>Discount codes, plus a stamp card: a stamp per order or per item, rewarding a discount or a free product.</span></li>
+            <li><b>Refunds that fit</b><span>Refund single items or the whole order. Customer refund requests land in a Disputes page, and you have 7 days to respond.</span></li>
+            <li><b>Practise first</b><span>Test mode lets you place fake orders from your own store without paying.</span></li>
+            <li><b>Get found</b><span>Print a QR poster that opens your menu. Reviews and your food hygiene rating are shown to customers.</span></li>
+            <li><b>Real help</b><span>Email merchantsupport@placemyorder.online. An AI assistant that knows Docket answers straight away, and a person steps in when it can’t help.</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="docket wide-docket" style="margin-top:36px">
+        <h3 style="margin-top:0">Launching your café</h3>
+        <div class="cols">
+          <div class="step"><i>1</i><div><b>Register</b><span>Name, postcode and email. Sign in with a link, no password.</span></div></div>
+          <div class="step"><i>2</i><div><b>Add your menu</b><span>Prices, options, allergens, hours.</span></div></div>
+          <div class="step"><i>3</i><div><b>Agree the terms</b><span>Read and accept the Merchant Terms.</span></div></div>
+          <div class="step"><i>4</i><div><b>Connect Mollie</b><span>Payouts go straight to your own Mollie balance.</span></div></div>
+          <div class="step"><i>5</i><div><b>Print the poster</b><span>Customers scan and order.</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="fees">
+      <div class="intro">
+        <h2>Money, plainly</h2>
+        <p>Customers never pay a Docket surcharge. Cafés pay 5% of each paid order, taken from the payout by Mollie. Mollie’s own card fees are separate.</p>
+      </div>
+      <div class="two">
+        <div class="docket">
+          <h3 style="margin-top:0">A £10.00 order</h3>
+          <div class="lead"><span>Customer pays</span><b>£10.00</b></div>
+          <div class="lead"><span>Docket fee, 5%</span><b>−£0.50</b></div>
+          <div class="lead tot"><span>Café receives</span><b>£9.50</b></div>
+          <p class="sub" style="margin-top:14px">Before Mollie’s card processing fees. Refer another café and you both pay 2.5% for 30 days.</p>
+        </div>
+        <div class="docket">
+          <h3 style="margin-top:0">If you’d rather keep the full £10.00</h3>
+          <p>Cafés can switch on “off-hand service fee to customer”. Prices go up by just enough to cover the fee. It’s the price that changes, not an added charge.</p>
+          <div class="lead"><span>Menu price you set</span><b>£10.00</b></div>
+          <div class="lead"><span>Shown to customer</span><b>£10.53</b></div>
+          <div class="lead tot"><span>Café receives</span><b>£10.00</b></div>
+          <p class="sub" style="margin-top:14px">Prices on Docket can never be more than 7.5% above in-store prices.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="trust">
+      <div class="docket wide-docket">
+        <h2 id="trust">Held to a standard</h2>
+        <div class="fine-print" style="color:var(--sub)">
+          <p>Docket checks the Food Standards Agency’s public hygiene ratings automatically. Food businesses rated 3 or below are not allowed on the platform, and are hidden from customers until their rating is 4 or 5.</p>
+          <p>Cafés agree to our Merchant Terms before they launch, including the 7.5% price rule. If a customer asks for a refund and the café doesn’t reply within 7 days, the refund is granted automatically.</p>
+          <p><a href="https://app.placemyorder.online/terms/">Read the Merchant Terms</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="cta">
+        <h2>Hungry, or open for business?</h2>
+        <div class="btns">
+          <a class="btn" href="https://app.placemyorder.online/">Order from a café</a>
+          <a class="btn sec" href="https://merchant.placemyorder.online/">Open your café</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p>Docket is run by Toby Jones T/A The Caffeine Media Company.</p>
+    <nav aria-label="Footer">
+      <a href="https://app.placemyorder.online/">Order</a>
+      <a href="https://merchant.placemyorder.online/">Café sign in</a>
+      <a href="https://app.placemyorder.online/terms/">Merchant Terms</a>
+      <a href="mailto:merchantsupport@placemyorder.online">merchantsupport@placemyorder.online</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
