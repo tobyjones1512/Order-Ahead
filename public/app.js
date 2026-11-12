@@ -558,7 +558,7 @@ async function orderView(id) {
           ${o.status !== 'awaiting_payment' && o.status !== 'refunded' ? H`<button class="btn sec" style="margin-bottom:10px" data-a="again" data-id="${id}">Order again</button>` : ''}
           ${o.status === 'completed' && !o.test ? H`<button class="btn sec" style="margin-bottom:10px" data-a="support" data-id="${id}">Support</button>` : ''}
           ${o.dispute ? disputeCard(o.dispute) : ''}
-          ${o.wallet && /iphone|ipad/i.test(navigator.userAgent) && o.status !== 'awaiting_payment' && o.status !== 'refunded' ? H`<a class="btn sec" style="margin-bottom:10px;text-decoration:none;text-align:center" href="/api/orders/${id}/wallet">Track in Apple Wallet</a>` : ''}
+          ${o.wallet && IOS && ['pending', 'accepted', 'ready'].includes(o.status) ? H`<a class="btn sec" style="margin-bottom:10px;text-decoration:none;text-align:center" href="/api/orders/${id}/wallet">Track in Apple Wallet</a>` : ''}
           ${canPush && !o.estimate ? H`<button class="btn sec" data-a="push" data-id="${id}">Notify me about this order</button>`
             : o.status !== 'completed' && !o.estimate && !('PushManager' in window) ? H`<div class="sub ground-sub">Add this app to your Home Screen for push alerts – we'll email you too.</div>` : ''}`}</div>`.raw;
     if ('PushManager' in window && Notification.permission === 'granted' && ['pending', 'accepted', 'ready'].includes(o.status) && !o.estimate && !ls.get('pushed', []).includes(id)) enablePush(id, true);
@@ -567,6 +567,7 @@ async function orderView(id) {
   await draw();
 }
 // ---------- support chat, complaints & refund requests ----------
+const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as a Mac
 const chats = {}; // order id -> chat history (kept while the page is open)
 const DSTAT = { open: 'Waiting for the café', accepted: 'Refund approved', refused: 'Refund declined', auto_refunded: 'Refunded (the café didn’t reply in time)' };
 const disputeCard = (d) => H`<h3>Refund request</h3><div class="group" style="padding:12px 16px"><b>${DSTAT[d.status] || d.status}</b>

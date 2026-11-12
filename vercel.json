@@ -5,6 +5,26 @@
       "has": [
         {
           "type": "host",
+          "value": "placemyorder.online"
+        }
+      ],
+      "destination": "/site/index.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.placemyorder.online"
+        }
+      ],
+      "destination": "/site/index.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
           "value": "merchant.placemyorder.online"
         }
       ],

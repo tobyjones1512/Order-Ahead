@@ -30,7 +30,7 @@ The platform fee is 5% of the total paid (food and tip), sent as a Mollie `appli
 - Scheduled orders alert the kitchen at pickup time minus prep time. Merchants can enable *Test mode* (fake orders, no payment) and *Off-hand service fee* (prices raised so they receive the full menu price).
 
 ## Domains (placemyorder.online)
-- `placemyorder.online`: landing page, static, in `docs/` (GitHub Pages: Settings → Pages → Deploy from branch → `main` / `/docs`; `docs/CNAME` sets the domain).
+- `placemyorder.online` (and `www`): the landing page, `public/site/index.html`, served by the same Vercel project (host rewrite in `vercel.json`). DNS: A `@` → `76.76.21.21`, CNAME `www` → `cname.vercel-dns.com`.
 - `app.placemyorder.online` (customers), `merchant.placemyorder.online` (kitchen app), `admin.placemyorder.online` (admin + `/escalations/` desk): all three are domains on the one Vercel project; `vercel.json` serves the right app at `/` per host.
 - Env: `BASE_URL=https://app.placemyorder.online`, `MERCHANT_URL=https://merchant.placemyorder.online`, `ADMIN_URL=https://admin.placemyorder.online`, `COOKIE_DOMAIN=.placemyorder.online` (shares the café sign-in with the admin site), `EMAIL_FROM=Docket <orders@placemyorder.online>`.
 

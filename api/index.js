@@ -2,7 +2,7 @@
 import { timingSafeEqual, createHmac, randomInt, randomBytes } from 'node:crypto';
 import { sql, init } from '../lib/db.js';
 import * as M from '../lib/mollie.js';
-import { email as sendEmail, notifyPaid, notifyReady, notifyAccepted, notifyRefund, notifyMerchantNew, notifyDisputeOpened, notifyDisputeResult, notifyAdminComplaint, pushTest, customerCodeHtml, merchantLinkHtml } from '../lib/notify.js';
+import { email as sendEmail, notifyPaid, notifyReady, notifyAccepted, notifyRefund, notifyMerchantNew, notifyDisputeOpened, notifyDisputeResult, notifyAdminComplaint, notifyAdminRefund, pushTest, customerCodeHtml, merchantLinkHtml } from '../lib/notify.js';
 import { slots, catAvailable, priceLine, totals, londonNow, toMins, discountFor, gross, refundAmount, FEE_RATE, REDUCED_FEE_RATE } from '../public/pricing.js';
 import { ask, systemPrompt } from '../lib/support.js';
 import { cleanAllergens, cleanDietary } from '../public/allergens.js';
@@ -554,7 +554,7 @@ route('DELETE', '/api/print/:token', async ({ p, q }) => { // printer confirms w
 });
 
 // ================= MERCHANT =================
-const TERMS_VERSION = '2'; // bump when public/terms/index.html changes materially
+const TERMS_VERSION = '3'; // bump when public/terms/index.html changes materially
 const ME = '(logo_pending is not null) as logo_pending,fee_pct,pass_fee,test_mode,terms_at,terms_version,id,email,name,address,postcode,color,vat_registered,vat_number,prep_minutes,extra_minutes,paused,open_time,close_time,logo,mollie_profile,allow_sitin,loyalty,referral_code,reduced_until,first_paid';
 const meOut = (m) => ({ ...m, logo: m.logo ? `/api/cafes/${m.id}/logo?v=${m.logo.length}` : null, mollie: !!m.mollie_profile, mollie_profile: undefined });
 
@@ -876,6 +876,24 @@ route('POST', '/api/m/disputes/:id/decide', async ({ m, p, body: b }) => {
 }, true);
 // admin: customer complaints and a read-only view of disputes
 route('GET', '/api/admin/complaints', async ({ m }) => { await adminOnly(m); return sql`select id, order_id, cafe_name, customer_name, customer_email, summary, transcript, status, created_at from complaints order by (status='new') desc, created_at desc limit 100`; }, true);
+route('GET', '/api/admin/complaints/:id/order', async ({ m, p }) => { // the order behind a complaint, for the refund sheet
+  await adminOnly(m);
+  const c = (await sql`select order_id from complaints where id=${+p.id}`)[0]; if (!c?.order_id) throw bad('No order on this complaint', 404);
+  const o = await getOrder(c.order_id);
+  return { num: o.num, total: o.total, refunded: o.refunded || 0, refunded_items: o.refunded_items || {}, items: o.items, status: o.status, test: !!o.test };
+}, true);
+route('POST', '/api/admin/complaints/:id/refund', async ({ m, p, body: b }) => { // full (no items) or partial (items) refund from the café's Mollie balance, then email the café
+  await adminOnly(m);
+  const c = (await sql`select * from complaints where id=${+p.id}`)[0]; if (!c?.order_id) throw bad('No order on this complaint', 404);
+  const o = await getOrder(c.order_id), mer = await merchantById(o.merchant_id); if (!mer) throw bad('That café no longer exists');
+  if (!['pending', 'accepted', 'ready', 'completed'].includes(o.status)) throw bad('This order can no longer be refunded');
+  const items = Array.isArray(b.items) && b.items.length ? b.items.map((x) => ({ i: +x.i, qty: +x.qty })) : null, note = str(b.note, 400);
+  await doRefund(o, mer, items);
+  const n = await getOrder(o.id), amount = (n.refunded || 0) - (o.refunded || 0);
+  await sql`update complaints set status='resolved' where id=${c.id}`;
+  await notifyAdminRefund(n, mer, amount, n.status === 'refunded' || (n.refunded || 0) >= n.total, note).catch((e) => console.error('admin refund email', e.message));
+  return { amount };
+}, true);
 route('POST', '/api/admin/complaints/:id/resolve', async ({ m, p }) => { await adminOnly(m); await sql`update complaints set status='resolved' where id=${+p.id}`; }, true);
 route('GET', '/api/admin/disputes', async ({ m }) => { await adminOnly(m); return sql`select d.id, d.status, d.reason, d.created_at, d.due_at, o.num, o.total, mm.name as cafe from disputes d join orders o on o.id=d.order_id left join merchants mm on mm.id=d.merchant_id order by d.created_at desc limit 100`; }, true);
 route('GET', '/api/cron/housekeeping', async ({ req, q }) => {
