@@ -159,7 +159,7 @@ function go(n, dir = 1) {
     i = n; const s = STEPS[i]; q.innerHTML = `<div class="step">${s.render()}<p class="err" id="err"></p><div class="row">${i && s.id !== 'sign' ? '<button class="btn" data-next>Next</button>' : ''}${i ? '<button class="back" data-back>Back</button>' : ''}</div></div>`;
     if (s.id === 'hi') q.querySelector('.row .back')?.remove();
     document.querySelectorAll('#dots i').forEach((d, k) => d.classList.toggle('on', k === i));
-    const f = $('#f'); if (f) { f.classList.add('caret'); s.live && (f.oninput = () => s.live(f.value)); f.onfocus = () => f.classList.remove('caret'); f.onkeydown = (e) => e.key === 'Enter' && next(); if (s.live) s.live(f.value); setTimeout(() => f.focus({ preventScroll: true }), 350); }
+    const f = $('#f'); if (f) { f.classList.add('caret'); s.live && (f.oninput = () => s.live(f.value)); f.onfocus = () => f.classList.remove('caret'); f.onkeydown = (e) => { if (e.key === 'Enter') next(); }; if (s.live) s.live(f.value); setTimeout(() => f.focus({ preventScroll: true }), 350); }
     s.extra && ($('#' + s.extra[0]).oninput = (e) => { D[s.extra[1]] = e.target.value; show(s.extra[2]); });
     s.after && s.after();
     q.querySelector('[data-next]')?.addEventListener('click', next); q.querySelector('[data-back]')?.addEventListener('click', () => go(i - 1));
