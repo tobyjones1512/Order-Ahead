@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Docket vs Uber Eats, Just Eat and Deliveroo: pickup fees</title>
+<meta name="description" content="Compare pickup fees and features: Docket charges cafés 5%. Uber Eats charges 13% + VAT and Just Eat 14% + 50p.">
+<meta name="theme-color" content="#CDD3DC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1013" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://placemyorder.online/compare/">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta property="og:title" content="Docket vs Uber Eats, Just Eat and Deliveroo: pickup fees">
+<meta property="og:description" content="Pickup fees and features compared: Docket vs Uber Eats, Just Eat and Deliveroo.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://placemyorder.online/compare/">
+<meta property="og:image" content="https://placemyorder.online/icons/icon-512.png">
+<link rel="preload" href="/fonts/Doto-900.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Chivo Mono";font-weight:400;font-display:swap;src:url(/fonts/ChivoMono-400.woff2) format("woff2")}
+@font-face{font-family:"Chivo Mono";font-weight:700;font-display:swap;src:url(/fonts/ChivoMono-700.woff2) format("woff2")}
+@font-face{font-family:"Doto";font-weight:900;font-display:swap;src:url(/fonts/Doto-900.woff2) format("woff2")}
+:root{
+  --ground:#CDD3DC;--text:#14161B;--gsub:#3F4550;
+  --paper:#FBFBF8;--ink:#14161B;--sub:#565C69;--rule:rgba(20,22,27,.4);--fill:rgba(20,22,27,.07);
+  --accent:#2B39F0;--on-accent:#fff;--red:#C42F17;--green:#0F6B37;--amber:#8F5200;
+  --mono:"Chivo Mono",ui-monospace,"SF Mono",Menlo,monospace;--dot:"Doto","Chivo Mono",ui-monospace,monospace;
+  --ease:cubic-bezier(.19,1,.22,1);
+}
+@media(prefers-color-scheme:dark){:root{--ground:#0E1013;--text:#ECEDEF;--gsub:#A3A9B5}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{margin:0;background:var(--ground);color:var(--text);font:400 16px/1.55 var(--mono);-webkit-font-smoothing:antialiased;text-wrap:pretty}
+::selection{background:var(--accent);color:var(--on-accent)}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--rule);border-radius:5px}
+a{color:inherit;text-underline-offset:.2em}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--paper);color:var(--ink);padding:10px 14px;z-index:9}.skip:focus{left:8px}
+h1,h2,h3{font-family:var(--dot);font-weight:900;margin:0;text-wrap:balance}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+tabular,.num{font-variant-numeric:tabular-nums}
+
+/* header */
+header.top{display:flex;align-items:center;gap:20px;padding:18px 0;position:relative;flex-wrap:wrap}
+.brand{font:900 34px/1 var(--dot);letter-spacing:.02em;text-decoration:none}
+.top nav{display:flex;gap:6px 20px;margin-left:auto;align-items:center;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.top nav a,.top nav button{background:none;border:0;padding:10px 2px;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:none;cursor:pointer;border-bottom:2px dashed transparent}
+.top nav a:hover,.top nav button:hover,.top nav button[aria-expanded=true]{border-bottom-color:currentColor}
+.pop{position:absolute;right:0;top:calc(100% - 4px);width:min(420px,100%);max-height:min(70vh,520px);overflow:auto;z-index:5;background:var(--paper);color:var(--ink);padding:20px 22px 18px;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 14px 18px rgba(20,22,27,.28));text-transform:none;letter-spacing:0;font-weight:400}
+.pop h2{font-size:28px;margin:0 0 4px}
+.pop .sub{font-size:13px;color:var(--sub);margin:0 0 12px}
+.pop ul{list-style:none;margin:0;padding:0}
+.pop li a{display:block;padding:11px 0;border-top:1px dashed var(--rule);text-decoration:none}
+.pop li a:hover b{color:var(--accent)}
+.pop li b{display:block;font-size:15px}.pop li span{font-size:13px;color:var(--sub)}
+.pop .none{padding:8px 0;color:var(--sub)}
+.pop[hidden]{display:none}
+
+/* buttons (the app's own) */
+.btn{display:inline-block;padding:15px 22px;border-radius:12px;background:var(--accent);color:var(--on-accent);font:700 14px/1.25 var(--mono);letter-spacing:.08em;text-transform:uppercase;text-decoration:none;text-align:center;border:2px solid var(--accent);transition:transform .12s var(--ease)}
+.btn:active{transform:translateY(2px) scale(.99)}
+.btn.sec{background:transparent;color:inherit;border-color:currentColor}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+
+/* dockets */
+.docket{position:relative;background:var(--paper);color:var(--ink);padding:26px 26px 22px;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 10px 12px rgba(20,22,27,.14));--sub:#3A404B}
+.docket::after{content:"";position:absolute;left:0;right:0;top:100%;height:7px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='7'%3E%3Cpath d='M0 0h14L7 7z' fill='%23FBFBF8'/%3E%3C/svg%3E") repeat-x}
+.docket h2{font-size:clamp(30px,4.4vw,44px);line-height:1.02;margin:0 0 14px}
+.docket h3{font-size:24px;line-height:1.1;margin:22px 0 6px}
+.docket p{margin:0 0 12px}
+.docket .sub{color:var(--sub);font-size:14px}
+.rule{border:0;border-top:1px dashed var(--rule);margin:16px 0}
+.lead{display:flex;align-items:baseline;gap:8px;margin:7px 0}
+.lead::after{content:"";order:1;flex:1;border-bottom:2px dotted var(--rule);transform:translateY(-4px);min-width:16px}
+.lead>span:first-child{order:0}.lead>b,.lead>span:last-child{order:2}
+.lead.tot{border-top:3px double var(--ink);padding-top:10px;margin-top:12px;font-weight:700}
+.lead.tot::after{display:none}.lead.tot>b{margin-left:auto}
+.stamp{display:inline-block;border:3px double var(--sc,var(--red));border-radius:6px;padding:6px 14px;font:900 26px/1 var(--dot);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);transform:rotate(-5deg);mix-blend-mode:multiply}
+.stamp.g{--sc:var(--green)}.stamp.b{--sc:var(--accent)}
+.band{margin:-26px -26px 20px;padding:16px 26px;background:var(--accent);color:var(--on-accent);font:900 30px/1.05 var(--dot);letter-spacing:.02em;text-transform:uppercase}
+.ticket{border-top:10px solid var(--red)}
+.list{list-style:none;margin:0;padding:0}
+.list li{padding:11px 0;border-top:1px dashed var(--rule)}.list li:first-child{border-top:0}
+.list b{display:block}
+.list span{color:var(--sub);font-size:14px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.7fr 1fr;gap:clamp(28px,4vw,56px);align-items:center;padding:clamp(28px,6vw,72px) 0 clamp(40px,7vw,96px)}
+.hero h1{font-size:clamp(40px,6.4vw,84px);line-height:.98;letter-spacing:.005em;margin:0 0 22px;text-wrap:wrap}
+.hero p{font-size:clamp(16px,1.6vw,19px);max-width:46ch;margin:0 0 28px;color:var(--text)}
+.hero .fine{font-size:13px;color:var(--gsub);margin:18px 0 0}
+.demo{max-width:380px;justify-self:center;width:100%;transform:rotate(1.6deg);animation:print 1.5s steps(14,end) .15s backwards}
+.demo .no{font:900 clamp(58px,9vw,80px)/1 var(--dot);margin:4px 0 2px}
+.demo .stampwrap{position:absolute;right:14px;top:96px}
+.demo .tiny{font-size:12px;color:var(--sub);margin-top:16px;text-align:center;letter-spacing:.04em}
+@keyframes print{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 -24px 0)}}
+
+/* sections */
+section{padding:clamp(28px,5vw,56px) 0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:start}
+.intro{max-width:52ch;margin:0 0 28px}
+.intro h2{font-size:clamp(34px,5vw,56px);line-height:1;margin-bottom:12px}
+.intro p{color:var(--text);margin:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 32px;margin-top:6px}
+.step{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:10px 0;border-top:1px dashed var(--rule)}
+.step i{font:900 24px/1 var(--dot);font-style:normal}
+.step b{display:block}
+.step span{color:var(--sub);font-size:14px}
+.wide-docket{max-width:760px}
+.fine-print{max-width:70ch;font-size:14px;color:var(--gsub)}
+.fine-print p{margin:0 0 10px}
+.cta{display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between}
+.cta h2{font-size:clamp(34px,5vw,56px);line-height:1;max-width:14ch}
+footer{padding:36px 0 64px;font-size:13px;color:var(--gsub);border-top:1px dashed var(--rule);margin-top:40px}
+footer .wrap{display:flex;gap:10px 28px;flex-wrap:wrap;justify-content:space-between}
+footer nav{display:flex;gap:0 20px;flex-wrap:wrap}footer nav a{display:inline-flex;align-items:center;min-height:44px}
+footer p{margin:0}
+
+@media(max-width:860px){
+  .hero,.two{grid-template-columns:1fr}
+  .demo{transform:none;max-width:420px}
+  .top nav{margin-left:0;width:100%}
+}
+@media(prefers-reduced-motion:reduce){.demo{animation:none}html{scroll-behavior:auto}.btn{transition:none}}
+@media print{.top nav,.btns,.pop{display:none}}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 8px 10px 0;border-top:1px dashed var(--rule);vertical-align:top}
+th{font:700 12px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--sub);border-top:0}
+tbody th{font-size:14px;letter-spacing:0;text-transform:none;color:var(--ink)}
+td.us{font-weight:700;color:var(--green)}
+.scroll{overflow-x:auto}
+.scroll table{min-width:620px}
+.page{padding:clamp(24px,5vw,56px) 0 0}
+.page h1{font-size:clamp(38px,6vw,72px);line-height:1;margin:0 0 18px}
+.page .lede{max-width:56ch;margin:0 0 32px}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/" aria-label="Docket home">Docket</a>
+    <nav aria-label="Main"><a href="https://app.placemyorder.online/">Order</a><a href="https://merchant.placemyorder.online/">Merchants</a></nav>
+  </header>
+  <main id="main" class="page">
+    <h1>Docket vs Uber Eats, Just Eat and Deliveroo for pickup</h1>
+    <p class="lede">For a café, a pickup order costs 5% on Docket. Uber Eats publishes 13% plus VAT. Just Eat charges 14% + 50p. Deliveroo doesn’t publish a pickup rate.</p>
+
+    <section aria-labelledby="t1"><div class="docket">
+      <h2 id="t1">Fees and features</h2>
+      <div class="scroll"><table>
+        <thead><tr><th scope="col"></th><th scope="col">Docket</th><th scope="col">Uber Eats</th><th scope="col">Just Eat</th><th scope="col">Deliveroo</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">Pickup commission</th><td class="us">5% of the total paid</td><td>13% + VAT</td><td>14% + 50p</td><td>Not published; agreed with Deliveroo</td></tr>
+        <tr><th scope="row">Setup fee</th><td class="us">None</td><td>£650 + VAT, one-off</td><td>Varies by agreement</td><td>Varies by agreement</td></tr>
+        <tr><th scope="row">Customer fees</th><td class="us">None; the customer pays the menu price</td><td>Service fee added for customers</td><td>Service fee added for customers</td><td>Service fee added for customers</td></tr>
+        <tr><th scope="row">Customer accounts</th><td class="us">None needed, works in the browser</td><td>App and account</td><td>App and account</td><td>App and account</td></tr>
+        <tr><th scope="row">Your own branding</th><td class="us">Menu themed with your colour and logo</td><td>Listed in their marketplace</td><td>Listed in their marketplace</td><td>Listed in their marketplace</td></tr>
+        </tbody>
+      </table></div>
+      <p class="sub" style="margin-top:14px">Card processing is charged separately by the payment processor on all platforms. Competitor details are from their public merchant pages and third-party summaries; check their current terms before you sign up.</p>
+    </div></section>
+
+    <section aria-labelledby="t2"><div class="docket wide-docket">
+      <h2 id="t2">On a £10 pickup order</h2>
+      <div class="lead"><span>Docket (5%)</span><b>£0.50</b></div>
+      <div class="lead"><span>Uber Eats (13% + VAT)</span><b>£1.56</b></div>
+      <div class="lead"><span>Just Eat (14% + 50p)</span><b>£1.90</b></div>
+      <div class="lead"><span>Deliveroo</span><span>not published</span></div>
+      <p class="sub" style="margin-top:14px">Docket’s 5% is worked out on the total paid, before any offer code. Uber Eats’ one-off £650 activation fee is on top.</p>
+    </div></section>
+
+    <section><div class="cta">
+      <h2>Keep more of every order.</h2>
+      <div class="btns"><a class="btn" href="https://app.jackpoll.org/s/B2xedyxVKH">Become a Merchant</a><a class="btn sec" href="https://demo.placemyorder.online/">Try the demo</a></div>
+    </div></section>
+  </main>
+</div>
+<footer><div class="wrap">
+  <p>Docket is run by Toby Jones T/A <a href="https://thecaffeinemediacompany.com">The Caffeine Media Company</a>. Uber Eats, Just Eat and Deliveroo are trademarks of their owners.</p>
+  <nav aria-label="Footer"><a href="/">Home</a><a href="https://merchant.placemyorder.online/">Merchants</a><a href="https://app.placemyorder.online/terms/">Merchant Terms</a></nav>
+</div></footer>
+</body>
+</html>

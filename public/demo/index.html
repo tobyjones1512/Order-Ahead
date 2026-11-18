@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Docket demo</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#CDD3DC">
+<link rel="icon" href="/icons/icon-192.png">
+<style>
+@font-face{font-family:"Chivo Mono";font-weight:400;src:url(/fonts/ChivoMono-400.woff2) format("woff2")}
+@font-face{font-family:"Chivo Mono";font-weight:700;src:url(/fonts/ChivoMono-700.woff2) format("woff2")}
+:root{--ground:#CDD3DC;--ink:#14161B;--sub:#565C69;--paper:#FBFBF8;--rule:rgba(20,22,27,.35);--accent:#2B39F0;--red:#C42F17;--green:#0F6B37;--amber:#8F5200;--text:#14161B;--gsub:#3F4550}
+@media(prefers-color-scheme:dark){:root{--ground:#0E1013;--text:#FFFFFF;--gsub:#B4BAC6}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--text);font:400 15px/1.45 "Chivo Mono",ui-monospace,Menlo,monospace}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+header{padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;border-bottom:1px dashed var(--rule)}
+header b{font-size:20px}
+header span{flex:1;min-width:200px;font-size:14px}
+header,header b,header span{color:var(--text)}
+header a{font-weight:700;color:var(--accent)}
+.tabs{display:none;gap:8px;padding:12px 16px 0}
+.tabs button{flex:1;padding:10px;border-radius:8px;background:var(--paper);color:var(--ink);font-weight:700}
+.tabs button[aria-selected=true]{background:var(--accent);color:#fff}
+main{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:16px;max-width:1200px;margin:0 auto}
+section{min-width:0}
+h2{margin:0 0 10px;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.card{--sub:#565C69;background:var(--paper);color:var(--ink);border-radius:10px;padding:14px;box-shadow:0 8px 14px rgba(20,22,27,.14)}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--rule)}
+.row:last-child{border:0}
+.row .g{flex:1;min-width:0}
+.row small{display:block;color:var(--sub)}
+.q{display:flex;align-items:center;gap:8px}
+.q button{width:32px;height:32px;border-radius:8px;background:var(--accent);color:#fff;font-weight:700}
+.q button:disabled{opacity:.3;cursor:default}
+.btn{display:block;width:100%;margin-top:12px;padding:12px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.btn.sec{background:transparent;color:var(--text);border:2px solid var(--text)}
+.card .btn.sec{color:var(--ink);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.sum{display:flex;justify-content:space-between;padding:4px 0}
+.tot{font-weight:700;border-top:2px solid var(--ink);margin-top:6px;padding-top:8px}
+.note{font-size:12px;color:var(--gsub);margin:10px 0 0}
+.ord{border-left:8px solid var(--red);padding:10px 12px;margin-bottom:12px}
+.ord.preparing{border-color:var(--amber)}.ord.ready{border-color:var(--green)}.ord.done{border-color:var(--sub);opacity:.6}
+.ord.fresh{animation:flash .6s 6 alternate}
+@keyframes flash{to{background:#ffe3df}}
+.ord h3{margin:0 0 4px;font-size:16px;display:flex;justify-content:space-between}
+.pill{font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:2px solid currentColor;border-radius:4px;padding:0 6px}
+.steps{display:flex;gap:6px;margin:10px 0}
+.steps i{flex:1;height:8px;border-radius:4px;background:var(--rule)}
+.steps i.on{background:var(--green)}
+.empty{color:var(--gsub);padding:20px 0;text-align:center}
+.card .note,.card .empty{color:var(--sub)}
+.kpis{display:flex;gap:10px;margin-bottom:12px}
+.kpis div{flex:1;background:var(--paper);color:var(--ink);border-radius:10px;padding:10px}
+.kpis small{display:block;color:var(--sub)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{padding:8px 12px;border-radius:8px;background:var(--paper);color:var(--ink);font-weight:700;font-size:13px;border:2px solid transparent}
+.chip.on{background:var(--accent);color:#fff}
+.cat{margin:14px 0 4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub)}
+.opt{margin:12px 0 4px;font-weight:700}
+.choices{display:flex;gap:8px;flex-wrap:wrap}
+.choices .chip{border-color:var(--rule)}
+.choices .chip.on{border-color:var(--accent)}
+.add{padding:8px 14px;border-radius:8px;background:var(--accent);color:#fff;font-weight:700}
+@media(max-width:860px){main{grid-template-columns:1fr}.tabs{display:flex}main[data-v=c] #k,main[data-v=k] #c{display:none}}
+@media(prefers-reduced-motion:reduce){.ord.fresh{animation:none}}
+</style>
+</head>
+<body>
+<header><b>Docket demo</b><span>Try both sides: order as a customer, then watch it arrive on the kitchen screen. Nothing is real and nothing is saved or charged.</span></header>
+<div class="tabs" role="tablist"><button role="tab" data-v="c" aria-selected="true">Customer view</button><button role="tab" data-v="k" aria-selected="false">Kitchen view</button></div>
+<main data-v="c">
+  <section id="c" aria-label="Customer view">
+    <h2>Customer · Demo Café</h2>
+    <div class="card" id="menu"></div>
+    <div id="sheet"></div>
+    <div class="card" id="basket" style="margin-top:14px"></div>
+    <div id="track"></div>
+  </section>
+  <section id="k" aria-label="Kitchen view">
+    <h2>Kitchen screen</h2>
+    <div class="kpis"><div><small>Orders today</small><b id="kn">0</b></div><div><small>Sales today</small><b id="ks">£0.00</b></div></div>
+    <button class="btn sec" id="snd" style="margin:0 0 12px">Tap to enable order sounds</button>
+    <div id="orders"></div>
+    <button class="btn sec" id="sample">Add a sample customer order</button>
+    <p class="note">In the real kitchen app a loud chime repeats until staff accept a new order, and the screen stays awake.</p>
+  </section>
+</main>
+<script>
+(function () {
+  // [category, [[name, price, options?]]]. Option group: [title, multi?, [[label, extra pence]]]
+  var MILK = ['Milk', false, [['Whole', 0], ['Semi-skimmed', 0], ['Oat', 50], ['Almond', 50]]], SIZE = ['Size', false, [['Regular', 0], ['Large', 60]]], SHOT = ['Extras', true, [['Extra shot', 50], ['Vanilla syrup', 40], ['Caramel syrup', 40]]];
+  var CATS = [
+    ['Hot drinks', [['Flat white', 320, [MILK, SIZE, SHOT]], ['Latte', 340, [MILK, SIZE, SHOT]], ['Cappuccino', 340, [MILK, SIZE, SHOT]], ['Hot chocolate', 360, [MILK, ['Extras', true, [['Whipped cream', 50], ['Marshmallows', 40]]]]]]],
+    ['Cold drinks', [['Iced coffee', 380, [MILK, SIZE, SHOT]], ['Fresh orange juice', 330, [SIZE]]]],
+    ['Bakery', [['Croissant', 280, [['Warmed', false, [['As it comes', 0], ['Warmed', 0]]], ['Extras', true, [['Butter & jam', 40]]]]], ['Banana bread', 300, [['Warmed', false, [['As it comes', 0], ['Warmed', 0]]]]]]],
+    ['Lunch', [['Cheese toastie', 550, [['Bread', false, [['White', 0], ['Sourdough', 40], ['Gluten-free', 70]]], ['Extras', true, [['Ham', 100], ['Tomato', 50], ['Bacon', 100]]]]], ['Soup of the day', 480, [['Bread', false, [['White roll', 0], ['Sourdough', 40]]]]]]]
+  ];
+  var cat = 'All', sheet = null, basket = [], orders = [], seq = 100400, mine = null, ac = null;
+  var $ = function (q) { return document.querySelector(q); };
+  var gbp = function (p) { return '£' + (p / 100).toFixed(2); };
+  var sum = function (ls) { return ls.reduce(function (a, l) { return a + l.p * l.q; }, 0); };
+  var item = function (ci, ii) { return CATS[ci][1][ii]; };
+
+  function drawMenu() {
+    var chips = ['All'].concat(CATS.map(function (c) { return c[0]; }));
+    var h = '<div class="chips" role="group" aria-label="Categories">' + chips.map(function (c) { return '<button class="chip' + (c === cat ? ' on' : '') + '" data-cat="' + c + '">' + c + '</button>'; }).join('') + '</div>';
+    CATS.forEach(function (c, ci) {
+      if (cat !== 'All' && cat !== c[0]) return;
+      h += '<div class="cat">' + c[0] + '</div>' + c[1].map(function (m, ii) {
+        return '<div class="row"><div class="g">' + m[0] + '<small>' + gbp(m[1]) + (m[2] ? ' · customisable' : '') + '</small></div><button class="add" data-ci="' + ci + '" data-ii="' + ii + '" aria-label="Add ' + m[0] + '">Add</button></div>';
+      }).join('');
+    });
+    $('#menu').innerHTML = h;
+  }
+  function drawSheet() {
+    if (!sheet) { $('#sheet').innerHTML = ''; return; }
+    var m = item(sheet.ci, sheet.ii), p = unit(sheet);
+    $('#sheet').innerHTML = '<div class="card" style="margin-top:14px;border:2px solid var(--accent)"><h2>' + m[0] + '</h2>' + (m[2] || []).map(function (g, gi) {
+      return '<div class="opt">' + g[0] + (g[1] ? ' (choose any)' : '') + '</div><div class="choices">' + g[2].map(function (o, oi) {
+        return '<button class="chip' + (sheet.sel[gi].indexOf(oi) > -1 ? ' on' : '') + '" data-g="' + gi + '" data-o="' + oi + '">' + o[0] + (o[1] ? ' +' + gbp(o[1]) : '') + '</button>';
+      }).join('') + '</div>';
+    }).join('') + '<button class="btn" id="addok">Add to basket · ' + gbp(p) + '</button><button class="btn sec" id="addno">Cancel</button></div>';
+  }
+  function unit(sh) {
+    var m = item(sh.ci, sh.ii), p = m[1];
+    (m[2] || []).forEach(function (g, gi) { sh.sel[gi].forEach(function (oi) { p += g[2][oi][1]; }); });
+    return p;
+  }
+  function names(sh) { var m = item(sh.ci, sh.ii); return (m[2] || []).reduce(function (a, g, gi) { return a.concat(sh.sel[gi].map(function (oi) { return g[2][oi][0]; })); }, []); }
+  function openSheet(ci, ii) {
+    var m = item(ci, ii); if (!m[2]) { pushLine({ ci: ci, ii: ii, sel: [] }); return; }
+    sheet = { ci: ci, ii: ii, sel: m[2].map(function (g) { return g[1] ? [] : [0]; }) }; drawSheet(); $('#sheet').scrollIntoView({ block: 'nearest' });
+  }
+  function pushLine(sh) {
+    var m = item(sh.ci, sh.ii), o = names(sh), key = m[0] + '|' + o.join(','), ex = basket.filter(function (l) { return l.key === key; })[0];
+    if (ex) ex.q++; else basket.push({ key: key, n: m[0], opts: o, p: unit(sh), q: 1 });
+    drawBasket();
+  }
+  function drawBasket() {
+    var s = sum(basket), tip = Math.round(s * 0.05);
+    $('#basket').innerHTML = basket.length
+      ? '<h2>Basket · collect ASAP</h2>' + basket.map(function (l, i) {
+        return '<div class="row"><div class="g">' + l.n + (l.opts.length ? '<small>' + l.opts.join(', ') + '</small>' : '') + '</div><div class="q"><button data-d="-1" data-l="' + i + '" aria-label="Remove one ' + l.n + '">−</button><span>' + l.q + '</span><button data-d="1" data-l="' + i + '" aria-label="Add one ' + l.n + '">+</button></div><span>' + gbp(l.p * l.q) + '</span></div>';
+      }).join('') + '<div class="sum"><span>Tip (5%)</span><span>' + gbp(tip) + '</span></div><div class="sum tot"><span>Total</span><span>' + gbp(s + tip) + '</span></div><button class="btn" id="pay">Pay ' + gbp(s + tip) + ' (demo)</button><p class="note">Real customers pay by card or Apple Pay. No payment is taken here.</p>'
+      : '<div class="empty">Add something to your basket</div>';
+  }
+  function drawTrack() {
+    var o = mine; if (!o) { $('#track').innerHTML = ''; return; }
+    var st = { new: 0, preparing: 1, ready: 2, done: 3 }[o.s];
+    $('#track').innerHTML = '<div class="card" style="margin-top:14px"><h2>Your order #' + o.num + '</h2><div class="steps">' + [0, 1, 2, 3].map(function (i) { return '<i class="' + (i <= st ? 'on' : '') + '"></i>'; }).join('') + '</div><b>' +
+      { new: 'Sent to the café…', preparing: 'The café is making your order', ready: 'Ready to collect!', done: 'Collected. Enjoy!' }[o.s] + '</b><p class="note">Customers also get a push notification when it’s ready. Switch to the Kitchen view to move this order along.</p></div>';
+  }
+  function drawKitchen() {
+    $('#kn').textContent = orders.length; $('#ks').textContent = gbp(orders.reduce(function (a, o) { return a + o.total; }, 0));
+    var next = { new: 'Accept', preparing: 'Ready for pickup', ready: 'Collected' };
+    $('#orders').innerHTML = orders.length ? orders.slice().reverse().map(function (o) {
+      return '<div class="card ord ' + o.s + (o.fresh ? ' fresh' : '') + '"><h3><span>#' + o.num + ' · ' + o.who + '</span><span class="pill">' + { new: 'New', preparing: 'Preparing', ready: 'Ready', done: 'Done' }[o.s] + '</span></h3>' +
+        o.ls.map(function (l) { return '<div>' + l.q + ' × ' + l.n + (l.opts && l.opts.length ? '<small> ' + l.opts.join(', ') + '</small>' : '') + '</div>'; }).join('') + '<small>ASAP · ' + gbp(o.total) + '</small>' +
+        (next[o.s] ? '<button class="btn" data-n="' + o.num + '">' + next[o.s] + '</button>' : '') + '</div>';
+    }).join('') : '<div class="empty">No orders yet. Place one as a customer, or add a sample.</div>';
+  }
+  function chime() {
+    if (!ac || ac.state !== 'running') return;
+    [880, 1175, 1480, 1175, 1480, 1760].forEach(function (f, i) {
+      var o = ac.createOscillator(), g = ac.createGain(), s = ac.currentTime + i * 0.18;
+      o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.6, s + 0.01); g.gain.exponentialRampToValueAtTime(0.001, s + 0.55);
+      o.connect(g).connect(ac.destination); o.start(s); o.stop(s + 0.6);
+    });
+  }
+  function place(ls, who) {
+    var s = sum(ls), o = { num: ++seq, ls: ls, who: who, total: s + Math.round(s * 0.05), s: 'new', fresh: true };
+    orders.push(o); chime(); drawKitchen(); return o;
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.cat) { cat = b.dataset.cat; drawMenu(); }
+    else if (b.dataset.ci) openSheet(+b.dataset.ci, +b.dataset.ii);
+    else if (b.dataset.g) {
+      var g = +b.dataset.g, o = +b.dataset.o, multi = item(sheet.ci, sheet.ii)[2][g][1], i = sheet.sel[g].indexOf(o);
+      sheet.sel[g] = multi ? (i > -1 ? sheet.sel[g].filter(function (x) { return x !== o; }) : sheet.sel[g].concat(o)) : [o]; drawSheet();
+    }
+    else if (b.id === 'addok') { pushLine(sheet); sheet = null; drawSheet(); }
+    else if (b.id === 'addno') { sheet = null; drawSheet(); }
+    else if (b.dataset.l) { var l = basket[+b.dataset.l]; l.q += +b.dataset.d; if (l.q < 1) basket.splice(+b.dataset.l, 1); drawBasket(); }
+    else if (b.id === 'pay') { mine = place(basket.map(function (l) { return { n: l.n, opts: l.opts, q: l.q, p: l.p }; }), 'You'); basket = []; drawBasket(); drawTrack(); }
+    else if (b.id === 'sample') place([{ n: 'Latte', opts: ['Oat', 'Large'], q: 2, p: 450 }, { n: 'Croissant', opts: ['Warmed'], q: 1, p: 280 }], 'Sam');
+    else if (b.id === 'snd') { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); b.textContent = 'Order sounds on'; b.disabled = true; chime(); }
+    else if (b.dataset.n) {
+      var o2 = orders.filter(function (x) { return x.num === +b.dataset.n; })[0];
+      o2.s = { new: 'preparing', preparing: 'ready', ready: 'done' }[o2.s]; o2.fresh = false; drawKitchen(); drawTrack();
+    } else if (b.closest('.tabs')) {
+      document.querySelectorAll('.tabs button').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+      $('main').dataset.v = b.dataset.v;
+    }
+  });
+  drawMenu(); drawBasket(); drawKitchen();
+})();
+</script>
+</body>
+</html>

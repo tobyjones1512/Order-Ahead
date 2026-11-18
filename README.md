@@ -1,6 +1,6 @@
 # Order Ahead
 
-Customer PWA at `/`, kitchen/merchant dashboard at `/m/`, one serverless function (`api/[...path].js`), Neon Postgres.
+Customer PWA at `/`, kitchen/merchant dashboard at `/m/`, one serverless API function (`api/index.js`, plus `api/support-inbound.js` for inbound support email), Neon Postgres.
 
 ## Deploy
 1. `npm i -g vercel && vercel` (add **Neon** from Vercel → Storage; it sets `DATABASE_URL`. Tables auto-create on first request).
@@ -22,12 +22,12 @@ Customer PWA at `/`, kitchen/merchant dashboard at `/m/`, one serverless functio
 
 ## Money model
 Menu prices are VAT-inclusive and what the customer pays (+ optional tip, default 5%). No surcharge.
-The platform fee is 5% of the total paid (food and tip), sent as a Mollie `applicationFee` and deducted from the merchant's settlement.
+The platform fee is 5% of the total paid (food and tip) *before any offer-code or loyalty-reward discount* (e.g. £10 with 10% off: customer pays £9, fee is 50p; never more than the amount paid), sent as a Mollie `applicationFee` and deducted from the merchant's settlement.
 
 ## Refunds, disputes & support
 - Merchants tap **Refund…** on an order to refund chosen items or everything left, from their Mollie balance. Application fees are non-refundable, so your 5% is kept and the merchant absorbs it.
 - Customers get a **Support** button on completed orders (AI chat). Refund requests (with optional photos) go to the café's **Disputes** tab; no reply in 7 days means an automatic refund. Café complaints go to the admin dashboard (`/admin/`, linked from the merchant Settings page for admin emails).
-- Scheduled orders alert the kitchen at pickup time minus prep time. Merchants can enable *Test mode* (fake orders, no payment) and *Off-hand service fee* (prices raised so they receive the full menu price).
+- Scheduled orders alert the kitchen at pickup time minus prep time. Merchants can enable *Test mode* (fake orders, no payment).
 
 ## Domains (placemyorder.online)
 - `placemyorder.online` (and `www`): the landing page, `public/site/index.html`, served by the same Vercel project (host rewrite in `vercel.json`). DNS: A `@` → `76.76.21.21`, CNAME `www` → `cname.vercel-dns.com`.

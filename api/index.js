@@ -3,13 +3,15 @@ import { timingSafeEqual, createHmac, randomInt, randomBytes } from 'node:crypto
 import { sql, init } from '../lib/db.js';
 import * as M from '../lib/mollie.js';
 import { email as sendEmail, notifyPaid, notifyReady, notifyAccepted, notifyRefund, notifyMerchantNew, notifyDisputeOpened, notifyDisputeResult, notifyAdminComplaint, notifyAdminRefund, pushTest, customerCodeHtml, merchantLinkHtml } from '../lib/notify.js';
-import { slots, catAvailable, priceLine, totals, londonNow, toMins, discountFor, gross, refundAmount, FEE_RATE, REDUCED_FEE_RATE } from '../public/pricing.js';
+import { slots, catAvailable, priceLine, totals, londonNow, toMins, discountFor, refundAmount, FEE_RATE, REDUCED_FEE_RATE } from '../public/pricing.js';
 import { ask, systemPrompt } from '../lib/support.js';
 import { cleanAllergens, cleanDietary } from '../public/allergens.js';
 import { ticket } from '../lib/ticket.js';
 import * as W from '../lib/wallet.js';
 import * as Q from '../lib/scanq.js';
 import * as D from '../lib/desk.js';
+import * as R from '../lib/review.js';
+import * as L from '../lib/licence.js';
 
 const { BASE_URL, SESSION_SECRET, VAPID_PUBLIC_KEY } = process.env;
 // Three sites share this one deployment: customers (BASE_URL = app.placemyorder.online), cafés (MERCHANT_URL) and the owner (ADMIN_URL). Unset = path-based (/m/, /admin/) on BASE_URL.
@@ -19,6 +21,7 @@ const SANDBOX = !!process.env.SANDBOX;
 const CK = process.env.COOKIE_DOMAIN ? `; Domain=${process.env.COOKIE_DOMAIN}` : ''; // e.g. .placemyorder.online so a café signed in on merchant.* is also signed in on admin.*
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
 const str = (s, n) => String(s ?? '').trim().slice(0, n);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -40,17 +43,17 @@ const who = (req) => verify(cookie(req, CP + 'cid'))?.c || null;
 const setCust = (res, email) => res.setHeader('Set-Cookie', `${CP}cid=${email ? sign({ c: email, exp: Date.now() + 365 * 864e5 }) : ''}; HttpOnly; Secure; SameSite=Lax; Path=/${CK}; Max-Age=${email ? 31536000 : 0}`);
 
 // ---------- helpers ----------
-const merchantById = async (id) => (await sql`select * from merchants where id=${id}`)[0];
+// Everything about a café except its big blobs (logo, licence file): this row is read on every order poll, so those are fetched only where they are used.
+const MCOLS = 'id,email,name,address,postcode,lat,lng,color,vat_registered,vat_number,prep_minutes,extra_minutes,paused,open_time,close_time,mollie_access,mollie_refresh,mollie_expires,mollie_profile,referral_code,referred_by,reduced_until,allow_sitin,created_at,first_paid,loyalty,terms_at,terms_version,pass_fee,test_mode,fee_pct,banned,table_service,licence,licence_status,licence_reason,alcohol_ok,licence_tried,licence_at,length(logo) as logo_len';
+const merchantById = async (id) => (await sql.query(`select ${MCOLS} from merchants where id=$1`, [id]))[0];
 const viewer = (req) => verify(cookie(req, CP + 'sid'))?.m; // signed-in café (same browser can also use the customer app)
 const isTest = (m, req) => !!m.test_mode && viewer(req) === m.id; // test mode: this café's own session sees its store and places fake orders
 async function connected(id, req) {
-  const m = (await sql`select * from merchants where id=${+id || 0}`)[0];
-  return m && (m.mollie_profile || isTest(m, req)) ? m : undefined;
+  const m = await merchantById(+id || 0);
+  return m && !m.banned && (m.mollie_profile || isTest(m, req)) ? m : undefined;
 }
 // hygiene rating below 4 (0-3, or Scotland's "Improvement Required") = hidden from customers; unrated places are allowed
 const lowRated = (b) => /^[0-3]$/.test(b.fhrs_rating || '') || /^improvement required$/i.test(b.fhrs_rating || '');
-// "Off-hand service fee to customer": prices are raised so the café nets its menu price after the platform fee
-const adj = (m, it) => (m.pass_fee ? { ...it, price_pence: gross(it.price_pence, rateFor(m)), options: (it.options || []).map((g) => ({ ...g, choices: g.choices.map((c) => ({ ...c, price: gross(c.price || 0, rateFor(m)) })) })) } : it);
 async function geocode(pc) {
   const j = await (await fetch('https://api.postcodes.io/postcodes/' + encodeURIComponent(pc.replace(/\s/g, '')))).json();
   if (!j.result) throw bad('Postcode not found');
@@ -61,8 +64,8 @@ const LOY = { enabled: false, name: 'Loyalty card', needed: 8, type: 'percent', 
 const loyOut = (c) => ({ ...LOY, ...(c || {}) });
 const pubCafe = (m) => ({
   id: m.id, name: m.name, color: m.color, vat: m.vat_registered,
-  logo: m.logo ? `/api/cafes/${m.id}/logo?v=${m.logo.length}` : null, profileId: m.mollie_profile, testmode: M.TEST,
-  sitin: m.allow_sitin !== false, loyalty: loyOut(m.loyalty),
+  logo: m.logo_len ? `/api/cafes/${m.id}/logo?v=${m.logo_len}` : null, profileId: m.mollie_profile, testmode: M.TEST,
+  sitin: m.allow_sitin !== false, tables: !!m.table_service, loyalty: loyOut(m.loyalty),
 });
 const branchesOf = (mid) => sql`select * from branches where merchant_id=${mid} order by sort, id`;
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
@@ -71,7 +74,7 @@ const rateFor = (m) => (m.fee_pct != null ? Number(m.fee_pct) / 100 : m.reduced_
 function eff(b, cl = []) {
   const t = today(), c = cl.filter((x) => x.branch_id === b.id && x.from_date <= t && x.to_date >= t).sort((p, q) => q.id - p.id)[0];
   if (!c) return b;
-  return c.kind === 'hours' ? { ...b, open_time: c.open_time, close_time: c.close_time, special: c.note || `Special hours today: ${c.open_time}–${c.close_time}` }
+  return c.kind === 'hours' ? { ...b, open_time: c.open_time, close_time: c.close_time, special: c.note || `Special hours today: ${c.open_time} to ${c.close_time}` }
     : { ...b, open_time: '00:00', close_time: '00:00', closed: c.note || 'Closed today' };
 }
 const closuresOf = (mid) => sql`select * from branch_closures where merchant_id=${mid} and to_date >= ${today()} order by from_date, id`;
@@ -108,9 +111,9 @@ async function insertOrder(f) {
   for (let i = 0; i < 8; i++) {
     const num = 100000 + randomInt(900000);
     if ((await sql`select 1 from orders where num=${num}`).length) continue;
-    return (await sql`insert into orders (num,merchant_id,branch_id,status,customer_name,customer_email,pickup_time,asap,items,subtotal,tip,vat,total,fee,service,allergy,discount,offer_code,reward_used,account,test)
+    return (await sql`insert into orders (num,merchant_id,branch_id,status,customer_name,customer_email,pickup_time,asap,items,subtotal,tip,vat,total,fee,service,allergy,discount,offer_code,reward_used,account,test,table_no)
       values (${num},${f.m},${f.branch},'awaiting_payment',${f.name},${f.email},${f.pick},${f.asap},${JSON.stringify(f.lines)}::jsonb,${f.subtotal},${f.tip},${f.vat},${f.total},${f.fee},
-      ${f.service},${JSON.stringify(f.allergy)}::jsonb,${f.discount},${f.offer},${f.reward},${f.account},${!!f.test}) returning id,total`)[0];
+      ${f.service},${JSON.stringify(f.allergy)}::jsonb,${f.discount},${f.offer},${f.reward},${f.account},${!!f.test},${f.table ?? null}) returning id,total`)[0];
   }
   throw bad('Please try again');
 }
@@ -121,16 +124,16 @@ async function getOrder(id) {
 }
 
 const FAIL = {
-  invalid_card_number: 'The card number isn’t valid – check it and try again.', invalid_cvv: 'The security code (CVV) wasn’t right – check it and try again.',
-  invalid_card_holder_name: 'The name on the card wasn’t accepted.', invalid_card_type: 'That type of card isn’t accepted – try a different card.', card_expired: 'That card has expired.',
-  inactive_card: 'That card isn’t active – contact your bank or try another card.', insufficient_funds: 'There weren’t enough funds on that card.', card_declined: 'Your card was declined – try another card.',
-  refused_by_issuer: 'Your bank declined the payment – try another card or contact your bank.', possible_fraud: 'Your bank flagged this payment – try another card or contact them.',
-  authentication_failed: 'Your bank’s security check (3-D Secure) didn’t pass – please try again.', authentication_abandoned: 'The bank’s security check wasn’t completed – please try again.',
-  authentication_required: 'Your bank needs extra verification – please try again.', authentication_unavailable_acs: 'Your bank’s security check is unavailable right now – try again shortly or use another card.',
+  invalid_card_number: 'The card number isn’t valid, check it and try again.', invalid_cvv: 'The security code (CVV) wasn’t right, check it and try again.',
+  invalid_card_holder_name: 'The name on the card wasn’t accepted.', invalid_card_type: 'That type of card isn’t accepted, try a different card.', card_expired: 'That card has expired.',
+  inactive_card: 'That card isn’t active, contact your bank or try another card.', insufficient_funds: 'There weren’t enough funds on that card.', card_declined: 'Your card was declined, try another card.',
+  refused_by_issuer: 'Your bank declined the payment, try another card or contact your bank.', possible_fraud: 'Your bank flagged this payment, try another card or contact them.',
+  authentication_failed: 'Your bank’s security check (3-D Secure) didn’t pass, please try again.', authentication_abandoned: 'The bank’s security check wasn’t completed, please try again.',
+  authentication_required: 'Your bank needs extra verification, please try again.', authentication_unavailable_acs: 'Your bank’s security check is unavailable right now, try again shortly or use another card.',
 };
-const failMsg = (reason, status) => FAIL[reason] || (status === 'expired' ? 'The payment timed out – please try again.' : status === 'canceled' ? 'The payment was cancelled.' : 'The payment didn’t go through – please try again or use another card.');
+const failMsg = (reason, status) => FAIL[reason] || (status === 'expired' ? 'The payment timed out, please try again.' : status === 'canceled' ? 'The payment was cancelled.' : 'The payment didn’t go through, please try again or use another card.');
 // Mollie request errors -> something a customer can act on (details stay in the logs)
-const payError = (e) => bad(/token/i.test(e.message) ? 'Your card details timed out – please re-enter them and try again.' : e.mollie ? 'We couldn’t take that payment. Check your details or try another card.' : e.message);
+const payError = (e) => bad(/token/i.test(e.message) ? 'Your card details timed out, please re-enter them and try again.' : e.mollie ? 'We couldn’t take that payment. Check your details or try another card.' : e.message);
 
 // Everything that follows a successful payment: offer use, loyalty stamp/reward, referral reward on a café's first paid order.
 async function afterPaid(n, m) {
@@ -229,11 +232,12 @@ const disputeOut = async (d) => ({ id: d.id, status: d.status, reason: d.reason,
 
 // Timed jobs, run opportunistically (kitchen + order polling, throttled) and by the daily cron:
 // 1) scheduled orders: alert the kitchen at pickup time minus prep time; 2) disputes the café hasn't answered in 7 days are refunded automatically.
-// ponytail: no always-on worker on Hobby – ping /api/cron/housekeeping every minute (cron-job.org) if you want alerts with no device open.
+// ponytail: no always-on worker on Hobby, ping /api/cron/housekeeping every minute (cron-job.org) if you want alerts with no device open.
 let lastHK = 0;
 async function housekeeping(force) {
   if (!force && Date.now() - lastHK < 20000) return; lastHK = Date.now();
   await Q.processQueue().catch((e) => console.error('scan queue', e.message)); // VirusTotal queue, max 3 files a minute
+  await R.retryStale().catch((e) => console.error('menu review', e.message));
   const due = await sql`update orders set alerted=true where alert_at is not null and not alerted and alert_at <= now() and status in ('pending','accepted') returning *`;
   for (const o of due) { const m = await merchantById(o.merchant_id); if (m) await notifyMerchantNew(o, m).catch((e) => console.error('alert', e)); }
   const ds = await sql`select * from disputes where status='open' and responded_at is null and due_at <= now()`;
@@ -263,7 +267,10 @@ export default async function handler(req, res) {
     for (const [method, re, keys, fn, auth] of routes) {
       const hit = method === req.method && re.exec(url.pathname); if (!hit) continue;
       const ctx = { req, res, who: () => who(req), q: url.searchParams, body: req.body || {}, p: Object.fromEntries(keys.map((k, i) => [k, decodeURIComponent(hit[i + 1])])) };
-      if (auth && !(ctx.m = verify(cookie(req, CP + 'sid'))?.m)) return json(res, 401, { error: 'Please sign in' });
+      if (auth) {
+        if (!(ctx.m = verify(cookie(req, CP + 'sid'))?.m)) return json(res, 401, { error: 'Please sign in' });
+        if ((await sql`select 1 from merchants where id=${ctx.m} and banned`).length) return json(res, 403, { error: 'This account has been suspended. Contact hello@thecaffeinemediacompany.com if you think this is a mistake.' });
+      }
       const out = await fn(ctx);
       return res.writableEnded ? undefined : json(res, 200, out ?? { ok: true });
     }
@@ -286,20 +293,20 @@ route('GET', '/api/config', () => ({ vapid: VAPID_PUBLIC_KEY, appUrl: BASE_URL, 
 route('GET', '/api/cafes', async ({ q }) => {
   const [lat, lng] = [parseFloat(q.get('lat')), parseFloat(q.get('lng'))];
   const term = (q.get('q') || '').trim().toLowerCase();
-  let all = await sql`select b.*, m.name as mname, m.color, m.logo, m.vat_registered from branches b join merchants m on m.id=b.merchant_id where m.mollie_profile is not null`;
+  let all = await sql`select b.*, m.name as mname, m.color, length(m.logo) as logo_len, m.vat_registered from branches b join merchants m on m.id=b.merchant_id where m.mollie_profile is not null and m.banned is not true`;
   await Promise.allSettled(all.filter((r) => !r.fhrs_checked).slice(0, 6).map((r) => refreshFhrs(r, r.mname))); // rate new places before listing them
   all = all.filter((r) => !lowRated(r));
   const cl = await sql`select * from branch_closures where to_date >= ${today()}`, rv = await sql`select branch_id, count(*)::int n, avg(stars)::float a from reviews group by 1`;
   const count = {}; all.forEach((r) => { count[r.merchant_id] = (count[r.merchant_id] || 0) + 1; });
-  // ponytail: haversine in JS – fine to a few thousand cafés; move to PostGIS/earthdistance beyond that.
+  // ponytail: haversine in JS, fine to a few thousand cafés; move to PostGIS/earthdistance beyond that.
   return all.filter((r) => !term || (r.mname + ' ' + r.name).toLowerCase().includes(term))
     .map((r) => ({ id: r.merchant_id, branchId: r.id, name: r.mname, branch: r.name, many: count[r.merchant_id] > 1, address: r.address, color: r.color, paused: r.paused, vat: r.vat_registered, closed: eff(r, cl).closed || null, special: eff(r, cl).special || null, estimate: !!r.printer_on, hygiene: r.fhrs_rating || null, reviews: rvOut(rv, r.id),
-      logo: r.logo ? `/api/cafes/${r.merchant_id}/logo?v=${r.logo.length}` : null, lat: r.lat, lng: r.lng, ...slots(eff(r, cl)), km: isNaN(lat) || r.lat == null ? null : km(lat, lng, r.lat, r.lng) }))
+      logo: r.logo_len ? `/api/cafes/${r.merchant_id}/logo?v=${r.logo_len}` : null, lat: r.lat, lng: r.lng, ...slots(eff(r, cl)), km: isNaN(lat) || r.lat == null ? null : km(lat, lng, r.lat, r.lng) }))
     .filter((c) => term || c.km === null || c.km < 30).sort((a, b) => (a.km ?? 0) - (b.km ?? 0)).slice(0, 80);
 });
 
 route('GET', '/api/cafes/:id/logo', async ({ p, res, req }) => {
-  const m = await connected(p.id, req); const mt = m?.logo?.match(/^data:(image\/\w+);base64,(.*)$/);
+  const m = await connected(p.id, req); const mt = m && (await sql`select logo from merchants where id=${m.id}`)[0]?.logo?.match(/^data:(image\/\w+);base64,(.*)$/);
   if (!mt) throw bad('No logo', 404);
   res.setHeader('Content-Type', mt[1]); res.setHeader('Cache-Control', 'public, max-age=300');
   res.end(Buffer.from(mt[2], 'base64'));
@@ -316,7 +323,7 @@ route('GET', '/api/cafes/:id', async ({ p, req }) => {
   await Promise.allSettled(brs.map((b) => refreshFhrs(b, m.name)));
   const shown = brs.filter((b) => !lowRated(b)); if (!shown.length) throw bad('Café not found', 404);
   const pc = pubCafe(m); if (pc.loyalty.type === 'product') pc.loyalty.itemName = (pc.loyalty.category ? cats.find((c) => c.id === pc.loyalty.category) : items.find((i) => i.id === pc.loyalty.item))?.name || null;
-  return { ...pc, test: isTest(m, req), offers: offers.length > 0, branches: shown.map((b) => pubBranch(b, off, cl, rv)), categories: cats.map((c) => ({ ...c, items: items.filter((i) => i.category_id === c.id).map((i) => ({ ...adj(m, i), merchant_id: undefined })) })) };
+  return { ...pc, test: isTest(m, req), offers: offers.length > 0, branches: shown.map((b) => pubBranch(b, off, cl, rv)), categories: cats.map((c) => ({ ...c, items: items.filter((i) => i.category_id === c.id && ((m.table_service && L.alcOk(m)) || !i.alcohol)).map((i) => ({ ...adj(m, i), merchant_id: undefined })) })) };
 });
 
 async function findOffer(mid, code, subtotal) {
@@ -333,18 +340,20 @@ route('POST', '/api/orders', async ({ body: b, who, req }) => {
   const br = b.branchId ? branches.find((x) => x.id === +b.branchId) : branches.length === 1 ? branches[0] : null;
   if (!br) throw bad('Choose which branch to collect from');
   if (lowRated(br)) throw bad('This café isn’t available right now', 404);
-  if (br.paused) throw bad('This café has paused new orders – please try again shortly');
+  if (br.paused) throw bad('This café has paused new orders, please try again shortly');
   const e = eff(br, await closuresOf(m.id)); if (e.closed) throw bad(e.closed);
   const t = slots(e);
-  const pick = b.pickup === 'asap' ? t.asap : t.slots.includes(b.pickup) ? b.pickup : null;
-  if (!pick) throw bad('That pickup time is no longer available');
+  const tbl = b.service === 'table' && !!m.table_service, tableNo = str(b.table, 20).replace(/^table\s*/i, '').replace(/\s+/g, ' ').toUpperCase(); // "table 12", "12 " and "12" are the same table // table service: served to the table as soon as it's ready, so always ASAP
+  if (tbl && !/^[A-Z0-9][A-Z0-9 \-\/.]{0,19}$/.test(tableNo)) throw bad('Enter your table number (letters, numbers and dashes only)');
+  const pick = tbl || b.pickup === 'asap' ? t.asap : t.slots.includes(b.pickup) ? b.pickup : null;
+  if (!pick) throw bad(tbl ? 'This café can’t take table orders right now' : 'That pickup time is no longer available');
   const name = str(b.name, 60), email = str(b.email, 120);
   if (!name || !/^\S+@\S+\.\S+$/.test(email)) throw bad('Please enter your name and a valid email');
-  const tipPct = Number.isInteger(b.tipPct) && b.tipPct >= 0 && b.tipPct <= 30 ? b.tipPct : 5;
-  const service = b.service === 'sitin' && m.allow_sitin !== false ? 'sitin' : 'takeaway', allergy = cleanAllergens(b.allergy);
+  const tipPct = Number.isInteger(b.tipPct) && b.tipPct >= 0 && b.tipPct <= 30 ? b.tipPct : b.service === 'table' ? 10 : 5;
+  const service = tbl ? 'table' : b.service === 'sitin' && m.allow_sitin !== false ? 'sitin' : 'takeaway', allergy = cleanAllergens(b.allergy);
 
   const [rawItems, cats] = await Promise.all([sql`select * from items where merchant_id=${m.id}`, sql`select * from categories where merchant_id=${m.id}`]);
-  const items = rawItems.map((i) => adj(m, i)), test = isTest(m, req);
+  const items = rawItems, test = isTest(m, req);
   const offRows = await sql`select kind, ref_id from branch_off where branch_id=${br.id}`;
   const offItems = new Set(offRows.filter((r) => r.kind === 'item').map((r) => r.ref_id)), offCats = new Set(offRows.filter((r) => r.kind === 'cat').map((r) => r.ref_id));
   const { dow } = londonNow(), pm = toMins(pick);
@@ -354,14 +363,17 @@ route('POST', '/api/orders', async ({ body: b, who, req }) => {
     if (!it || !it.available || offItems.has(it.id) || offCats.has(it.category_id)) throw bad('An item in your basket isn’t available at this branch');
     if (!(qty >= 1 && qty <= 20)) throw bad('Invalid quantity');
     const cat = cats.find((c) => c.id === it.category_id);
-    if (cat && !catAvailable(cat, dow, pm)) throw bad(`${it.name} isn't available at ${pick}`);
+    if (cat && !catAvailable(cat, dow, pm)) throw bad(`${it.name} isn’t available at ${pick}`);
     let pl; try { pl = priceLine(it, l.sel); } catch (x) { throw bad(`${it.name}: ${x.message}`); }
     const sel = Object.fromEntries(it.options.map((g, gi) => [gi, (l.sel?.[gi] || []).map(Number)])); // kept so "order again" can rebuild the exact choices
-    lines.push({ id: it.id, name: it.name, qty, unit: pl.unit, opts: pl.names, sel }); subtotal += pl.unit * qty;
+    if (it.alcohol && !tbl) throw bad(`${it.name} contains alcohol, so it can only be ordered with table service`);
+    if (it.alcohol && !L.alcOk(m)) throw bad(`${it.name} isn’t available right now`);
+    lines.push({ id: it.id, name: it.name, qty, unit: pl.unit, opts: pl.names, sel, ...(it.alcohol && { alc: true }) }); subtotal += pl.unit * qty;
   }
   if (!lines.length) throw bad('Your basket is empty');
+  if (lines.some((l) => l.alc) && b.over18 !== true) throw bad('Please confirm you’re 18 or over to order alcohol');
 
-  // discount: either a loyalty reward or an offer code – never both. Applies to the food, not the tip.
+  // discount: either a loyalty reward or an offer code, never both. Applies to the food, not the tip.
   let discount = 0, offer = null, reward = false; const d = who();
   if (b.useReward) {
     if (!d) throw bad('Sign in (Settings) to use your loyalty reward');
@@ -379,8 +391,8 @@ route('POST', '/api/orders', async ({ body: b, who, req }) => {
     const o = await findOffer(m.id, b.offer, subtotal); discount = discountFor(o.kind, o.value, subtotal); offer = o.code;
   }
   const tipPence = Number.isInteger(b.tipPence) && b.tipPence >= 0 && b.tipPence <= 10000 ? b.tipPence : null; // custom tip, max £100
-  const x = totals(subtotal - discount, tipPct, m.vat_registered, tipPence, rateFor(m));
-  const created = await insertOrder({ m: m.id, branch: br.id, name, email, pick, asap: b.pickup === 'asap', lines, subtotal, tip: x.tip, vat: x.vat, total: x.total, fee: x.fee, service, allergy, discount, offer, reward, account: d, test });
+  const x = totals(subtotal - discount, tipPct, m.vat_registered, tipPence, rateFor(m), discount); // offer-code and loyalty-reward discounts don't reduce the platform fee
+  const created = await insertOrder({ m: m.id, branch: br.id, name, email, pick, asap: tbl || b.pickup === 'asap', table: tbl ? tableNo : null, lines, subtotal, tip: x.tip, vat: x.vat, total: x.total, fee: x.fee, service, allergy, discount, offer, reward, account: d, test });
   return { ...created, discount, wallet: test ? null : W.info(created.id) }; // lets the client hand the order to Wallet via Apple Pay
 });
 
@@ -400,7 +412,7 @@ route('GET', '/api/loyalty', async ({ q, who, req }) => {
 const codeHash = (email, code) => mac(email + ':' + code);
 route('POST', '/api/me/code', async ({ body: b }) => {
   const email = str(b.email, 120).toLowerCase(); if (!/^\S+@\S+\.\S+$/.test(email)) throw bad('Enter a valid email');
-  if ((await sql`select 1 from customer_codes where email=${email} and sent_at > now() - interval '60 seconds'`).length) throw bad('A code was just sent – check your email, or wait a minute to ask again');
+  if ((await sql`select 1 from customer_codes where email=${email} and sent_at > now() - interval '60 seconds'`).length) throw bad('A code was just sent. Check your email, or wait a minute to ask again.');
   const code = String(randomInt(1e6)).padStart(6, '0');
   await sql`insert into customer_codes (email,code_hash,expires_at,tries,sent_at) values (${email},${codeHash(email, code)},now() + interval '10 minutes',0,now())
     on conflict (email) do update set code_hash=excluded.code_hash, expires_at=excluded.expires_at, tries=0, sent_at=now()`;
@@ -440,7 +452,8 @@ route('POST', '/api/orders/:id/pay', async ({ p, body: b }) => {
   if (o.status === 'awaiting_payment' && o.payment_id) ({ o } = await settle(o)); // an earlier attempt may actually have gone through
   if (o.status !== 'awaiting_payment') throw bad('This order is already paid');
   const m = await merchantById(o.merchant_id);
-  if (o.test || o.total === 0) { await markPaid(o, m); return { checkoutUrl: null }; } // test order, or fully covered by a reward / offer // fully covered by a reward / offer
+  if (!m || m.banned) throw bad('This café isn’t taking orders right now');
+  if (o.test || o.total === 0) { await markPaid(o, m); return { checkoutUrl: null }; } // test order, or fully covered by a reward / offer
   if (!b.cardToken && !b.applePayToken) throw bad('Missing payment details');
   let pay;
   try {
@@ -469,11 +482,11 @@ route('POST', '/api/applepay/session', async ({ body: b, req }) => {
 route('GET', '/api/orders/:id', async ({ p }) => {
   await housekeeping().catch((e) => console.error('housekeeping', e));
   const { o, failed, reason } = await settle(await getOrder(p.id));
-  const m = (await merchantById(o.merchant_id)) || { id: o.merchant_id, name: 'Closed café', color: null }, brs = await branchesOf(m.id), br = brs.find((x) => x.id === o.branch_id) || brs[0];
+  const [mer, brs, [review = null], [dp]] = await Promise.all([merchantById(o.merchant_id), branchesOf(o.merchant_id), // one round trip each, in parallel: this route is polled every few seconds
+    sql`select stars, comment from reviews where order_id=${o.id}::uuid`, sql`select * from disputes where order_id=${o.id}::uuid order by created_at desc limit 1`]);
+  const m = mer || { id: o.merchant_id, name: 'Closed café', color: null }, br = brs.find((x) => x.id === o.branch_id) || brs[0];
   const { customer_email, push_sub, account, payment_id, fee, merchant_id, branch_id, printed_at, stamped, ...pub } = o;
-  const review = (await sql`select stars, comment from reviews where order_id=${o.id}::uuid`)[0] || null;
   const stale = Date.now() - new Date(o.created_at) > 45 * 60e3; // printer cafés never tick orders off, so allow a review after a while
-  const dp = (await sql`select * from disputes where order_id=${o.id}::uuid order by created_at desc limit 1`)[0];
   return { ...pub, dispute: dp ? await disputeOut(dp) : null, failed, reason, wallet: W.enabled() && !o.test, review, canReview: !review && (o.status === 'completed' || (br?.printer_on && stale && ['pending', 'accepted', 'ready'].includes(o.status))),
     estimate: !!br?.printer_on, cafe: { id: m.id, branchId: br?.id, name: m.name + (brs.length > 1 ? ' · ' + br.name : ''), color: m.color, address: br?.address || '', vat_number: m.vat_number } };
 });
@@ -556,19 +569,21 @@ route('DELETE', '/api/print/:token', async ({ p, q }) => { // printer confirms w
 });
 
 // ================= MERCHANT =================
-const TERMS_VERSION = '3'; // bump when public/terms/index.html changes materially
-const ME = '(logo_pending is not null) as logo_pending,fee_pct,pass_fee,test_mode,terms_at,terms_version,id,email,name,address,postcode,color,vat_registered,vat_number,prep_minutes,extra_minutes,paused,open_time,close_time,logo,mollie_profile,allow_sitin,loyalty,referral_code,reduced_until,first_paid';
-const meOut = (m) => ({ ...m, logo: m.logo ? `/api/cafes/${m.id}/logo?v=${m.logo.length}` : null, mollie: !!m.mollie_profile, mollie_profile: undefined });
+const TERMS_VERSION = '8'; // bump when public/terms/index.html changes materially
+const ME = '(logo_pending is not null) as logo_pending,fee_pct,pass_fee,test_mode,terms_at,terms_version,id,email,name,address,postcode,color,vat_registered,vat_number,prep_minutes,extra_minutes,paused,open_time,close_time,logo,mollie_profile,allow_sitin,table_service,licence_status,licence_reason,licence,alcohol_ok,loyalty,referral_code,reduced_until,first_paid';
+const meOut = (m) => ({ ...m, alcohol: { status: m.licence_status || null, reason: m.licence_reason || null, ok: L.alcOk(m), type: m.licence?.type || null, number: m.licence?.number || null, expires: m.licence?.expires || null }, licence: undefined, licence_status: undefined, licence_reason: undefined, alcohol_ok: undefined, logo: m.logo ? `/api/cafes/${m.id}/logo?v=${m.logo.length}` : null, mollie: !!m.mollie_profile, mollie_profile: undefined });
 
-// Passwordless: emailed link carries a signed 15-min token (replayable inside the window on purpose –
+// Passwordless: emailed link carries a signed 15-min token (replayable inside the window on purpose,
 // single-use links get burned by email security scanners that pre-click them).
 route('POST', '/api/m/login', async ({ body: b }) => {
   const email = str(b.email, 120).toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) throw bad('Enter a valid email');
   const t = { e: email, exp: Date.now() + 15 * 60e3 };
-  if (!(await sql`select 1 from merchants where email=${email}`).length) { // new café: validate signup details now
+  const ex = (await sql`select banned from merchants where email=${email}`)[0];
+  if (ex?.banned) throw bad('This account has been suspended', 403);
+  if (!ex) { // new café: validate signup details now
     const name = str(b.name, 80), pc = str(b.postcode, 10).toUpperCase();
-    if (!name || !pc) throw bad('No account for that email – register your café first');
+    if (!name || !pc) throw bad('There’s no account for that email. Register your café first.');
     Object.assign(t, { n: name, pc, ...(await geocode(pc)) });
     if (str(b.ref, 10)) { // referred by another café
       const r = (await sql`select id from merchants where referral_code=${str(b.ref, 10).toUpperCase()}`)[0];
@@ -581,7 +596,8 @@ route('GET', '/api/m/verify', async ({ q, res }) => {
   const t = verify(q.get('t'));
   if (!t?.e) { res.redirect(302, MURL + '/?expired=1'); return; }
   const [m] = await sql`insert into merchants (email,name,postcode,lat,lng,referred_by,referral_code) values (${t.e},${t.n || 'My café'},${t.pc || ''},${t.lat ?? null},${t.lng ?? null},${t.r ?? null},upper(substr(md5(random()::text || ${t.e}),1,6)))
-    on conflict (email) do update set email=excluded.email returning id`;
+    on conflict (email) do update set email=excluded.email returning id, banned`;
+  if (m.banned) { res.redirect(302, MURL + '/?banned=1'); return; }
   await sql`insert into branches (merchant_id,name,address,postcode,lat,lng,open_time,close_time,prep_minutes,extra_minutes,paused)
     select id,'Main',address,postcode,lat,lng,open_time,close_time,prep_minutes,extra_minutes,paused from merchants m where m.id=${m.id} and not exists (select 1 from branches b where b.merchant_id=m.id)`;
   setSession(res, m.id);
@@ -595,7 +611,7 @@ route('DELETE', '/api/m/account', async ({ m, res, body: b }) => {
   if ((await sql`select 1 from orders where merchant_id=${m} and (status in ('pending','accepted','ready') or (status='awaiting_payment' and created_at > now() - interval '1 hour')) limit 1`).length || (await sql`select 1 from disputes where merchant_id=${m} and status='open' limit 1`).length) throw bad('Finish or refund your open orders and resolve open disputes first');
   await sql.transaction([
     sql`delete from branch_off where branch_id in (select id from branches where merchant_id=${m})`,
-    sql`delete from branches where merchant_id=${m}`, sql`delete from items where merchant_id=${m}`, sql`delete from categories where merchant_id=${m}`,
+    sql`delete from branches where merchant_id=${m}`, sql`delete from items where merchant_id=${m}`, sql`delete from categories where merchant_id=${m}`, sql`delete from menu_changes where merchant_id=${m}`,
     sql`delete from dispute_imgs where dispute_id in (select id from disputes where merchant_id=${m})`, sql`delete from dispute_msgs where dispute_id in (select id from disputes where merchant_id=${m})`, sql`delete from disputes where merchant_id=${m}`,
     sql`delete from offers where merchant_id=${m}`, sql`delete from loyalty where merchant_id=${m}`,
     sql`delete from reviews where merchant_id=${m}`, sql`delete from branch_closures where merchant_id=${m}`, sql`delete from merchant_push where merchant_id=${m}`,
@@ -617,6 +633,34 @@ async function meFull(m) {
       done('order', 'Take your first order', me.first_paid)] };
 }
 route('GET', '/api/m/me', ({ m }) => meFull(m), true);
+route('POST', '/api/m/licence', async ({ m, body: b }) => { // Alcohol Entitlement request: licence details + a photo/PDF, virus-scanned, then emailed to the owner to grant or refuse
+  const d = { type: str(b.type, 60), number: str(b.number, 40), issuer: str(b.issuer, 80), holder: str(b.holder, 100), premises: str(b.premises, 200), dps: str(b.dps, 100), expires: str(b.expires, 10) };
+  if (!L.TYPES.includes(d.type) || !d.number || !d.issuer || !d.holder || !d.premises) throw bad('Fill in the licence type, number, issuing council, holder and premises address');
+  if (d.expires && !DATE.test(d.expires)) throw bad('Enter the expiry date as a date, or leave it blank');
+  await L.submit(m, d, b.file);
+  return meFull(m);
+}, true);
+route('GET', '/api/admin/licences', async ({ m }) => { await adminOnly(m); return L.waiting(); }, true);
+route('POST', '/api/admin/cafes/:id/licence', async ({ m, p, body: b }) => { await adminOnly(m); await L.decide(+p.id, b.approve === true, str(b.reason, 400)); }, true);
+// Grant / Refuse buttons in the owner's email: GET shows a confirm page (so mail scanners that pre-click links change nothing), POST decides.
+const pageHtml = (res, title, body) => { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Cache-Control', 'no-store'); res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${title}</title><body style="font:16px/1.5 ui-monospace,Menlo,monospace;max-width:480px;margin:10vh auto;padding:0 16px"><h1 style="font-size:22px">${title}</h1>${body}`); };
+const entitlement = async ({ q, body: b, res, req }) => {
+  const f = req.method === 'POST' ? b : Object.fromEntries(q), a = f.a === 'grant' ? 'grant' : f.a === 'refuse' ? 'refuse' : '';
+  const [m] = await sql`select * from merchants where id=${+f.m || 0}`;
+  if (!a || !m || !m.licence_tried || !L.linkOk(m, a, f.k || '')) return pageHtml(res, 'Link not valid', '<p>This link is invalid or has been replaced by a newer request.</p>');
+  if (m.licence_status !== 'in_review') return pageHtml(res, 'Already decided', `<p>${esc(m.name)}’s Alcohol Entitlement request has already been ${m.licence_status === 'accepted' ? 'granted' : 'refused'}.</p>`);
+  const form = (extra, label, bg) => `<form method="post" action="/api/entitlement/act"><input type="hidden" name="m" value="${m.id}"><input type="hidden" name="a" value="${a}"><input type="hidden" name="k" value="${esc(f.k)}">${extra}<button style="margin-top:12px;padding:12px 20px;border:0;border-radius:8px;background:${bg};color:#fff;font:700 14px inherit;text-transform:uppercase;cursor:pointer">${label}</button></form>`;
+  if (req.method !== 'POST') return pageHtml(res, a === 'grant' ? `Grant ${esc(m.name)} the Alcohol Entitlement?` : `Refuse ${esc(m.name)}?`, a === 'grant' ? form('', 'Grant Entitlement', '#0F6B37') : form('<p>Why? This is emailed to the café.</p><textarea name="reason" required maxlength="400" rows="4" style="width:100%;font:inherit"></textarea>', 'Refuse', '#C42F17'));
+  try { await L.decide(m.id, a === 'grant', str(f.reason, 400)); } catch (e) { return pageHtml(res, 'Not done', `<p>${esc(e.message)}</p>`); }
+  pageHtml(res, a === 'grant' ? 'Entitlement granted' : 'Refused', `<p>${esc(m.name)} has been emailed the result.</p>`);
+};
+route('GET', '/api/entitlement/act', entitlement);
+route('POST', '/api/entitlement/act', entitlement);
+route('GET', '/api/admin/cafes/:id/licence', async ({ m, p, res }) => { // the evidence file, for a human to audit
+  await adminOnly(m);
+  const r = (await sql`select licence_file f from merchants where id=${+p.id}`)[0], mt = r?.f?.match(/^data:([\w/+.-]+);base64,(.*)$/); if (!mt) throw bad('No licence on file', 404);
+  res.setHeader('Content-Type', mt[1]); res.setHeader('Cache-Control', 'no-store'); res.end(Buffer.from(mt[2], 'base64'));
+}, true);
 route('POST', '/api/m/terms', async ({ m, body: b }) => { // agreeing is a prerequisite for connecting Mollie (= launching the store)
   if (b.accept !== true || b.version !== TERMS_VERSION) throw bad('Please read and agree to the current Merchant Terms');
   await sql`update merchants set terms_at=now(), terms_version=${TERMS_VERSION} where id=${m}`;
@@ -627,23 +671,23 @@ route('PUT', '/api/m/me', async ({ m, body: b }) => {
   const cur = await merchantById(m), n = { ...cur };
   for (const k of ['name', 'address', 'vat_number']) if (typeof b[k] === 'string') n[k] = b[k].trim().slice(0, 120);
   if (/^#[0-9a-f]{6}$/i.test(b.color)) n.color = b.color;
-  for (const k of ['vat_registered', 'paused', 'allow_sitin', 'pass_fee', 'test_mode']) if (typeof b[k] === 'boolean') n[k] = b[k];
+  for (const k of ['vat_registered', 'paused', 'allow_sitin', 'table_service', 'test_mode']) if (typeof b[k] === 'boolean') n[k] = b[k];
   for (const k of ['prep_minutes', 'extra_minutes']) if (Number.isInteger(b[k]) && b[k] >= 0 && b[k] <= 120) n[k] = b[k];
   for (const k of ['open_time', 'close_time']) if (TIME.test(b[k])) n[k] = b[k];
   if (typeof b.logo === 'string' && b.logo.length < 4e5 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(b.logo)) {
-    if (b.logo !== cur.logo) {
+    if (b.logo !== (await sql`select logo from merchants where id=${m}`)[0].logo) {
       const [, mime, b64] = /^data:(image\/\w+);base64,(.*)$/.exec(b.logo), r = await Q.submit({ kind: 'logo', ref: m, buf: Buffer.from(b64, 'base64'), mime });
       if (r.status === 'flagged') throw bad('That file was flagged by our virus check, so it can’t be uploaded.');
       if (r.status === 'queued') await sql`update merchants set logo_pending=${b.logo} where id=${m}`; // goes live when the virus check finishes
-      else n.logo = b.logo;
+      else await sql`update merchants set logo=${b.logo} where id=${m}`;
     }
   }
   if (b.postcode && str(b.postcode, 10).toUpperCase() !== cur.postcode) { n.postcode = str(b.postcode, 10).toUpperCase(); Object.assign(n, await geocode(n.postcode)); }
   if (!n.name) throw bad('Name required');
   if (n.name !== cur.name) await sql`update branches set fhrs_id=null,fhrs_name=null,fhrs_rating=null,fhrs_date=null,fhrs_checked=null where merchant_id=${m}`;
-  await sql`update merchants set name=${n.name},address=${n.address},postcode=${n.postcode},lat=${n.lat},lng=${n.lng},logo=${n.logo},color=${n.color},
+  await sql`update merchants set name=${n.name},address=${n.address},postcode=${n.postcode},lat=${n.lat},lng=${n.lng},color=${n.color},
     vat_registered=${n.vat_registered},vat_number=${n.vat_number},prep_minutes=${n.prep_minutes},extra_minutes=${n.extra_minutes},
-    paused=${n.paused},open_time=${n.open_time},close_time=${n.close_time},allow_sitin=${n.allow_sitin !== false},pass_fee=${n.pass_fee === true},test_mode=${n.test_mode === true} where id=${m}`;
+    paused=${n.paused},open_time=${n.open_time},close_time=${n.close_time},allow_sitin=${n.allow_sitin !== false},table_service=${n.table_service === true},test_mode=${n.test_mode === true} where id=${m}`;
   return meFull(m);
 }, true);
 
@@ -716,11 +760,12 @@ const offerOut = (o) => ({ ...o, expires_at: o.expires_at ? new Date(o.expires_a
 route('GET', '/api/m/offers', async ({ m }) => (await sql`select * from offers where merchant_id=${m} order by id desc`).map(offerOut), true);
 route('POST', '/api/m/offers', async ({ m, body: b }) => {
   const code = str(b.code, 20).toUpperCase(), kind = b.kind === 'fixed' ? 'fixed' : 'percent', value = Math.floor(+b.value), min = Math.floor(+b.min_spend) || 0;
-  if (!/^[A-Z0-9]{3,20}$/.test(code)) throw bad('Codes are 3–20 letters or numbers');
+  if (!/^[A-Z0-9]{3,20}$/.test(code)) throw bad('Codes are 3 to 20 letters or numbers');
   if (!(value >= 1 && value <= (kind === 'percent' ? 100 : 10000))) throw bad(kind === 'percent' ? 'Choose a percentage from 1 to 100' : 'Choose an amount up to £100');
   const max = Math.floor(+b.max_uses) > 0 ? Math.floor(+b.max_uses) : null, exp = DATE.test(b.expires || '') ? b.expires : null;
   try {
-    await sql`insert into offers (merchant_id,code,kind,value,min_spend,max_uses,expires_at) values (${m},${code},${kind},${value},${Math.max(0, min)},${max},(${exp}::date + 1)::timestamp at time zone 'Europe/London')`;
+    if (exp) await sql`insert into offers (merchant_id,code,kind,value,min_spend,max_uses,expires_at) values (${m},${code},${kind},${value},${Math.max(0, min)},${max},(${exp}::date + 1)::timestamp at time zone 'Europe/London')`;
+    else await sql`insert into offers (merchant_id,code,kind,value,min_spend,max_uses) values (${m},${code},${kind},${value},${Math.max(0, min)},${max})`; // no expiry date: runs until switched off or deleted
   } catch (e) { if (e.code === '23505') throw bad('You already have a code with that name'); throw e; }
 }, true);
 route('PUT', '/api/m/offers/:id', async ({ m, p, body: b }) => { await sql`update offers set active=${!!b.active} where id=${+p.id} and merchant_id=${m}`; }, true);
@@ -770,7 +815,7 @@ route('GET', '/api/admin/overview', async ({ m }) => {
 }, true);
 route('GET', '/api/admin/cafes', async ({ m }) => {
   await adminOnly(m);
-  return sql.query(`select m.id, m.name, m.email, m.created_at, (m.mollie_profile is not null) live, m.reduced_until, m.fee_pct::float fee_pct, m.referral_code, m.referred_by,
+  return sql.query(`select m.id, m.name, m.email, m.created_at, coalesce(m.banned,false) banned, (m.mollie_profile is not null) live, m.reduced_until, m.fee_pct::float fee_pct, m.referral_code, m.referred_by,
     (select count(*) from branches b where b.merchant_id=m.id)::int branches, coalesce(o.orders,0) orders, coalesce(o.gmv,0) gmv, coalesce(o.fees,0) fees, coalesce(r.n,0) reviews, r.a avg
     from merchants m left join (select merchant_id, count(*)::int orders, sum(total)::int gmv, sum(fee)::int fees from orders where ${PAID} and created_at > now() - interval '30 days' group by 1) o on o.merchant_id=m.id
     left join (select merchant_id, count(*)::int n, avg(stars)::float a from reviews group by 1) r on r.merchant_id=m.id order by m.id desc`);
@@ -785,6 +830,12 @@ route('POST', '/api/admin/cafes/:id/reduced', async ({ m, p, body: b }) => { // 
   await sql`update merchants set reduced_until = case when ${days}=0 then null else greatest(coalesce(reduced_until, now()), now()) + make_interval(days => ${days}) end where id=${+p.id}`;
 }, true);
 
+route('POST', '/api/admin/cafes/:id/ban', async ({ m, p, body: b }) => { // ban (or with banned:false, restore) a café: it can't sign in and is hidden from customers
+  await adminOnly(m);
+  const t = await merchantById(+p.id) || (() => { throw bad('Café not found', 404); })();
+  if (adminEmails().includes(t.email.toLowerCase())) throw bad('You can’t ban an admin account');
+  await sql`update merchants set banned=${b.banned === true} where id=${t.id}`;
+}, true);
 route('POST', '/api/admin/cafes/:id/fee', async ({ m, p, body: b }) => { // set (or with pct:null clear) a custom platform fee for one café
   await adminOnly(m);
   const pct = b.pct === null || b.pct === '' ? null : Math.round(+b.pct * 100) / 100;
@@ -813,6 +864,18 @@ route('POST', '/api/admin/desk/:id/reply', async ({ m, p, body: b }) => {
 route('POST', '/api/admin/desk/:id/status', async ({ m, p, body: b }) => {
   await adminOnly(m); if (!['open', 'answered', 'done'].includes(b.status)) throw bad('Bad status');
   await sql`update support_threads set status=${b.status}, updated_at=now() where id=${p.id}`;
+}, true);
+
+// ---- merchant support chat (in the kitchen app). The newest chat is shown; "New chat" just posts without a thread id.
+const chatOut = async (id) => { const t = (await sql`select id, subject, status, escalated from support_threads where id=${id}`)[0]; return { ...t, msgs: await sql`select id, by, body, created_at from support_msgs where thread_id=${id} order by id` }; };
+route('GET', '/api/m/chat', async ({ m }) => {
+  const t = (await sql`select id from support_threads where email=${(await merchantById(m)).email.toLowerCase()} order by updated_at desc limit 1`)[0];
+  return t ? chatOut(t.id) : { msgs: [] };
+}, true);
+route('POST', '/api/m/chat', async ({ m, body: b }) => {
+  const me = await merchantById(m), text = str(b.text, 2000); if (!text) throw bad('Write a message first');
+  const tid = /^[a-f0-9]{16}$/.test(b.thread || '') ? b.thread : null;
+  return chatOut(await D.chatSend(me.email, me.name, tid, text));
 }, true);
 
 // ================= SUPPORT, COMPLAINTS & DISPUTES =================
@@ -927,7 +990,7 @@ route('GET', '/api/mollie/callback', async ({ q, res }) => {
   // OAuth tokens are organisation-wide, so /profiles/me isn't allowed: list profiles and take the first (prefer a verified one).
   const list = (await M.api(null, '/profiles', { token: t.access_token }))._embedded?.profiles || [];
   const prof = list.find((x) => x.status === 'verified') || list[0];
-  if (!prof) throw bad('Your Mollie account has no website profile yet – create one in the Mollie dashboard, then reconnect');
+  if (!prof) throw bad('Your Mollie account has no website profile yet. Create one in the Mollie dashboard, then reconnect.');
   await sql`update merchants set mollie_profile=${prof.id} where id=${st.m}`;
   res.redirect(302, MURL + '/');
 });
@@ -936,16 +999,17 @@ route('GET', '/api/m/menu', async ({ m }) => ({
   categories: await sql`select * from categories where merchant_id=${m} order by sort, id`,
   items: await sql`select * from items where merchant_id=${m} order by id`,
   off: await sql`select branch_id, kind, ref_id from branch_off where branch_id in (select id from branches where merchant_id=${m})`,
+  changes: (await sql`select id, kind, ref, data->>'name' name, (case when status in ('draft','refused') then data end) data, status, section, reason, ref, created_at from menu_changes where merchant_id=${m} and (status in ('draft','in_review') or (status='refused' and kind='item' and ref is null) or id in (select id from menu_changes where merchant_id=${m} order by id desc limit 15)) order by id desc`).map((c) => ({ ...c, rule: R.ruleOf(c.section) })),
 }), true);
 
 route('POST', '/api/m/categories', async ({ m, body: b }) => {
   const name = str(b.name, 60); if (!name) throw bad('Name required');
   const t = (x) => (TIME.test(x) ? x : null);
   const days = Array.isArray(b.days) ? [...new Set(b.days.map(Number).filter((d) => d >= 0 && d <= 6))] : [0, 1, 2, 3, 4, 5, 6];
-  if (b.id) await sql`update categories set name=${name},from_time=${t(b.from_time)},to_time=${t(b.to_time)},days=${days} where id=${+b.id} and merchant_id=${m}`;
-  else await sql`insert into categories (merchant_id,name,from_time,to_time,days) values (${m},${name},${t(b.from_time)},${t(b.to_time)},${days})`;
+  return R.draft(m, 'cat', { id: +b.id || null, name, from_time: t(b.from_time), to_time: t(b.to_time), days }, +b.draft_id || null); // a draft until sent for review and accepted
 }, true);
 route('DELETE', '/api/m/categories/:id', async ({ m, p }) => {
+  await sql`delete from menu_changes where merchant_id=${m} and status='draft' and ((kind='cat' and ref=${+p.id}) or (kind='item' and data->>'category_id'=${String(+p.id)}))`;
   await sql`delete from items where category_id=${+p.id} and merchant_id=${m}`;
   await sql`delete from categories where id=${+p.id} and merchant_id=${m}`;
 }, true);
@@ -957,17 +1021,27 @@ route('POST', '/api/m/items', async ({ m, body: b }) => {
     name: str(g.name, 40), multi: !!g.multi,
     choices: (g.choices || []).slice(0, 30).map((c) => ({ name: str(c.name, 40), allergens: cleanAllergens(c.allergens), price: Number.isInteger(c.price) && c.price >= 0 && c.price < 1e4 ? c.price : 0 })).filter((c) => c.name),
   })).filter((g) => g.name && g.choices.length);
-  const cat = (await sql`select id from categories where id=${+b.category_id} and merchant_id=${m}`)[0];
+  const dcat = +b.category_draft || null; // a category that is itself still a draft
+  const cat = dcat ? (await sql`select id from menu_changes where id=${dcat} and merchant_id=${m} and kind='cat' and ref is null and status='draft'`)[0] : (await sql`select id from categories where id=${+b.category_id} and merchant_id=${m}`)[0];
   if (!cat) throw bad('Pick a category');
   const al = cleanAllergens(b.allergens), none = !al.length && b.no_allergens === true;
   if (!al.length && !none) throw bad('Declare allergens: tick what the item contains, or choose “No allergens”');
-  const row = [name, str(b.description, 200), price, b.available !== false, JSON.stringify(opts), cat.id, JSON.stringify(al), JSON.stringify(cleanDietary(b.dietary))];
-  if (b.id) await sql`update items set name=${row[0]},description=${row[1]},price_pence=${row[2]},available=${row[3]},options=${row[4]}::jsonb,category_id=${row[5]},allergens=${row[6]}::jsonb,dietary=${row[7]}::jsonb,no_allergens=${none} where id=${+b.id} and merchant_id=${m}`;
-  else await sql`insert into items (merchant_id,name,description,price_pence,available,options,category_id,allergens,dietary,no_allergens) values (${m},${row[0]},${row[1]},${row[2]},${row[3]},${row[4]}::jsonb,${row[5]},${row[6]}::jsonb,${row[7]}::jsonb,${none})`;
+  const alc = b.alcohol === true && L.alcOk(await merchantById(m)); // only cafés holding the Alcohol Entitlement can declare a drink alcoholic; everyone else is left to the automatic check
+  const it = { id: +b.id || null, name, description: str(b.description, 200), price, available: b.available !== false, options: opts, category_id: dcat ? null : cat.id, ...(dcat && { category_draft: dcat }), allergens: al, dietary: cleanDietary(b.dietary), no_allergens: none, ...(alc && { alcohol: true }) };
+  // Flipping Available (sold out) is operational, not a content change: apply it at once. Anything else is reviewed first.
+  if (it.id && !dcat && (await sql`select 1 from items where id=${it.id} and merchant_id=${m} and name=${it.name} and description=${it.description} and price_pence=${it.price} and category_id=${it.category_id} and options=${JSON.stringify(opts)}::jsonb and allergens=${JSON.stringify(al)}::jsonb and dietary=${JSON.stringify(it.dietary)}::jsonb and coalesce(no_allergens,false)=${none}`).length) {
+    await sql`update items set available=${it.available} where id=${it.id} and merchant_id=${m}`;
+    await sql`delete from menu_changes where merchant_id=${m} and kind='item' and ref=${it.id} and status='draft'`; // content is back to live, so any draft edit is moot
+    if (+b.draft_id) await sql`delete from menu_changes where id=${+b.draft_id} and merchant_id=${m} and status='draft'`;
+    return { status: 'accepted' };
+  }
+  return R.draft(m, 'item', it, +b.draft_id || null);
 }, true);
-route('DELETE', '/api/m/items/:id', async ({ m, p }) => { await sql`delete from items where id=${+p.id} and merchant_id=${m}`; }, true);
+route('POST', '/api/m/menu/submit', ({ m }) => R.submitDrafts(m), true);
+route('DELETE', '/api/m/menu/drafts/:id', async ({ m, p }) => { await R.discard(m, +p.id); }, true);
+route('DELETE', '/api/m/items/:id', async ({ m, p }) => { await sql`delete from menu_changes where merchant_id=${m} and kind='item' and ref=${+p.id} and status='draft'`; await sql`delete from items where id=${+p.id} and merchant_id=${m}`; }, true);
 
-route('GET', '/api/m/orders', async ({ m }) => { await housekeeping().catch((e) => console.error('housekeeping', e)); return sql`select id,num,branch_id,status,customer_name,pickup_time,asap,items,subtotal,tip,total,created_at,service,allergy,discount,offer_code,reward_used,printed_at,test,alert_at,alerted,refunded,refunded_items from orders
+route('GET', '/api/m/orders', async ({ m }) => { await housekeeping().catch((e) => console.error('housekeeping', e)); return sql`select id,num,branch_id,status,customer_name,pickup_time,asap,items,subtotal,tip,total,created_at,service,table_no,allergy,discount,offer_code,reward_used,printed_at,test,alert_at,alerted,refunded,refunded_items from orders
   where merchant_id=${m} and (status in ('pending','accepted','ready') or (status='completed' and created_at > now() - interval '12 hours'))
   order by created_at`; }, true);
 
@@ -1023,7 +1097,7 @@ route('GET', '/api/m/export', async ({ m, q, res }) => {
   const rows = await sql.query(`${TXQ} limit 20000`, [m, br, days, '']);
   const names = Object.fromEntries((await branchesOf(m)).map((b) => [b.id, b.name]));
   const pounds = (p) => (p / 100).toFixed(2);
-  const lines = [['Order', 'Date (UK)', 'Branch', 'Customer', 'Status', 'Subtotal', 'VAT included', 'Tip', 'Total paid', 'Platform fee (5%)', 'Net to you']].concat(rows.map((o) => [
+  const lines = [['Order', 'Date (UK)', 'Branch', 'Customer', 'Status', 'Subtotal', 'VAT included', 'Tip', 'Total paid', 'Platform fee', 'Net to you']].concat(rows.map((o) => [
     o.num, new Date(o.created_at).toLocaleString('en-GB', { timeZone: 'Europe/London' }), names[o.branch_id] || '', o.customer_name, o.status, pounds(o.subtotal), pounds(o.vat), pounds(o.tip), pounds(o.total), pounds(o.fee),
     pounds(o.status === 'refunded' ? -o.fee : o.total - (o.refunded || 0) - o.fee)]));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="docket-sales-${days}d.csv"`);

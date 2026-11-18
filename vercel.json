@@ -72,6 +72,24 @@
     },
     {
       "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "demo.placemyorder.online"
+        }
+      ],
+      "destination": "/demo/index.html"
+    },
+    {
+      "source": "/escalations",
+      "destination": "/admin/escalations/index.html"
+    },
+    {
+      "source": "/escalations/",
+      "destination": "/admin/escalations/index.html"
+    },
+    {
+      "source": "/",
       "destination": "/app-shell/index.html"
     },
     {

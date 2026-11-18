@@ -33,7 +33,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn--sm{padding:7px 12px;font-size:12px}
 .field{width:100%;background:var(--paper);color:var(--ink);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;caret-color:var(--accent)}
 .field:focus{border-color:var(--accent);outline:none}
-.login{min-height:100%;display:grid;place-items:center;padding:24px}
+.login{min-height:100%;display:grid;grid-template-columns:minmax(0,420px);place-content:center;padding:24px}
 .login div{width:min(420px,100%);display:grid;gap:14px;background:var(--paper);color:var(--ink);padding:26px;position:relative;filter:drop-shadow(0 1px 0 rgba(20,22,27,.12)) drop-shadow(0 10px 12px rgba(20,22,27,.14))}
 .login h1{font:900 34px/1 var(--dot);margin:0}
 .login p{margin:0}
@@ -63,6 +63,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .row__sub{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row__pre{font-size:13px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill{display:inline-block;border:2px solid var(--sc,var(--sub));border-radius:4px;padding:0 7px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.meta .pill,.view__head .pill{color:var(--text)}
 .pill--open{--sc:var(--red)}
 .pill--answered,.pill--ok{--sc:var(--green)}
 .pill--esc{--sc:var(--amber)}
@@ -147,6 +148,9 @@ function call(method,path,body){
       if(r.status===401||r.status===403){showLogin(r.status===403?"This account isn’t an admin.":"Sign in as an admin first.");throw new Error("auth")}
       if(!r.ok)throw new Error(j.error||"Something went wrong.");return j})});
 }
+function popover(title,src){var d=document.createElement("dialog");d.style.cssText="width:min(900px,94vw);height:80vh;padding:0;border:0;background:var(--paper);color:var(--ink)";
+  var h=el("div");h.style.cssText="display:flex;justify-content:space-between;align-items:center;padding:8px 12px";var c=el("button","btn btn--sm","Close");c.type="button";c.onclick=function(){d.close()};h.append(el("b",null,title),c);
+  var f=document.createElement("iframe");f.src=src;f.title=title;f.style.cssText="width:100%;height:calc(100% - 48px);border:0";d.append(h,f);d.onclose=function(){d.remove()};document.body.append(d);d.showModal()} // files open in a popover, never a new tab
 function showLogin(msg){$("app").hidden=true;$("login").hidden=false;$("loginMsg").textContent=msg}
 var WORDS={merchant:"Merchant",bot:"Assistant",owner:"You"};
 function pill(text,cls){return el("span","pill"+(cls?" pill--"+cls:""),text)}
@@ -187,11 +191,11 @@ function drawThread(){
   t.msgs.forEach(function(m){
     var box=el("div","msg msg--"+m.by),h=el("div","msg__h");h.append(el("b",null,WORDS[m.by]||m.by),el("span",null,when(m.created_at)));
     box.append(h,el("div","msg__b",m.body));
-    if(m.files&&m.files.length){var a=el("div","atts");m.files.forEach(function(f){var r=el("div");r.append(el("span",null,f.name+" "),scanPill(f));if(f.link){var x=el("a",null," VirusTotal");x.href=f.link;x.target="_blank";x.rel="noopener noreferrer";r.append(x)}a.append(r)});a.append(el("span","hint","Files are scanned and never stored or opened here."));box.append(a)}
+    if(m.files&&m.files.length){var a=el("div","atts");m.files.forEach(function(f){var r=el("div");r.append(el("span",null,f.name+" "),scanPill(f));if(f.link){var x=el("button","btn btn--ghost btn--sm"," VirusTotal");x.type="button";x.onclick=function(){popover(f.name,f.link)};r.append(x)}a.append(r)});a.append(el("span","hint","Files are scanned and never stored or opened here."));box.append(a)}
     v.append(box);
   });
   var c=el("div","composer");c.append(el("h3",null,"Reply to "+(t.name||t.email)));
-  var ta=el("textarea","field");ta.placeholder="Write your reply. It is sent from merchantsupport@placemyorder.online in the Docket email design.";c.append(ta);
+  var ta=el("textarea","field");ta.placeholder="Write your reply. It is sent from escalations@placemyorder.online in the Docket email design.";c.append(ta);
   var s=el("div","send"),b=el("button","btn","Send reply");b.type="button";s.append(b,el("span","hint","Your reply marks the chain as answered."));c.append(s);
   b.onclick=function(){var text=ta.value.trim();if(!text)return;b.disabled=true;b.textContent="Sending…";
     call("POST","/"+t.id+"/reply",{text:text}).then(function(){open(t.id);loadList()}).catch(function(e){b.disabled=false;b.textContent="Send reply";alert(e.message)})};

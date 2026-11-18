@@ -41,10 +41,11 @@ export function priceLine(item, sel = {}) {
 }
 
 // Prices are VAT-inclusive (UK norm); tips are not VATable. Platform fee = 5% of everything paid (so 5% of the tip too),
-// deducted from the merchant's payout – never added to the customer's total.
-export function totals(subtotal, tipPct, vatRegistered, tipPence = null, rate = FEE_RATE) { // tipPence = custom £ amount, overrides the percentage
+// deducted from the merchant's payout, never added to the customer's total.
+export function totals(subtotal, tipPct, vatRegistered, tipPence = null, rate = FEE_RATE, offerOff = 0) { // tipPence = custom £ amount, overrides the percentage
+  // offerOff = what an offer code or loyalty reward took off: the platform fee is worked out before that discount (but can never exceed what is actually paid)
   const tip = tipPence ?? Math.round(subtotal * tipPct / 100), total = subtotal + tip;
-  return { tip, total, fee: Math.round(total * rate), vat: vatRegistered ? Math.round(subtotal * VAT_RATE / (1 + VAT_RATE)) : 0 };
+  return { tip, total, fee: Math.min(total, Math.round((total + offerOff) * rate)), vat: vatRegistered ? Math.round(subtotal * VAT_RATE / (1 + VAT_RATE)) : 0 };
 }
 
 // Offer codes and loyalty rewards reduce the basket (never the tip). kind: 'percent' (value = %) or 'fixed' (value = pence); cap = max pence off (0 = none).
@@ -53,8 +54,6 @@ export function discountFor(kind, value, subtotal, cap = 0) {
   return Math.max(0, Math.min(subtotal, cap ? Math.min(d, cap) : d));
 }
 
-// "Off-hand service fee to customer": raise a price so the café still receives the full amount after the platform fee (rounded up to the penny).
-export const gross = (pence, rate = FEE_RATE) => Math.ceil(pence / (1 - rate));
 
 // Amount (pence) to refund when pick = [{ i, qty }] items of order o are refunded; `all` = this clears the order, so refund everything left (tip included).
 // Item refunds are scaled by any discount the order had, and never exceed what's still refundable.
@@ -75,6 +74,8 @@ if (typeof process !== 'undefined' && process.argv?.[1]?.endsWith('pricing.js'))
   assert.equal(totals(400, 0, false).vat, 0);
   assert.deepEqual(totals(400, 5, false, 150), { tip: 150, total: 550, fee: 28, vat: 0 });
   assert.equal(totals(400, 0, false, null, 0.025).fee, 10);
+  assert.deepEqual(totals(900, 0, false, null, 0.05, 100), { tip: 0, total: 900, fee: 50, vat: 0 }); // £10 with 10% off: pays £9, fee still 5% of £10
+  assert.equal(totals(0, 0, false, null, 0.05, 500).fee, 0); // fee never exceeds the amount paid
   assert.equal(discountFor('percent', 10, 450), 45); assert.equal(discountFor('fixed', 500, 300), 300); assert.equal(discountFor('percent', 100, 800, 500), 500);
   assert.equal(catAvailable({ to_time: '11:00', days: [1] }, 1, 600), true);
   assert.equal(catAvailable({ to_time: '11:00', days: [1] }, 1, 660), false);
@@ -82,7 +83,6 @@ if (typeof process !== 'undefined' && process.argv?.[1]?.endsWith('pricing.js'))
   const it = { price_pence: 300, options: [{ name: 'Milk', multi: false, choices: [{ name: 'Whole', price: 0 }, { name: 'Oat', price: 50 }] }, { name: 'X', multi: true, choices: [{ name: 'Shot', price: 60 }] }] };
   assert.equal(priceLine(it, { 0: [1], 1: [0] }).unit, 410);
   assert.throws(() => priceLine(it, {}));
-  assert.equal(gross(100), 106); assert.equal(gross(0), 0); assert.equal(gross(100, 0.025), 103); assert.ok(Math.round(gross(350) * 0.95) >= 350);
   const ord = { items: [{ unit: 300, qty: 2 }, { unit: 400, qty: 1 }], subtotal: 1000, discount: 100, total: 925, tip: 25, refunded: 0 };
   assert.equal(refundAmount(ord, [{ i: 1, qty: 1 }], false), 360); assert.equal(refundAmount(ord, [], true), 925);
   assert.equal(refundAmount({ ...ord, refunded: 900 }, [{ i: 1, qty: 1 }], false), 25); assert.equal(refundAmount({ ...ord, discount: 0 }, [{ i: 0, qty: 1 }], false), 300);

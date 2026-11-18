@@ -13,11 +13,11 @@ let allergensOn = ls.get('allergensOn', avoid.length > 0), defaults = ls.get('de
 const av = () => (allergensOn ? avoid : []);
 const words = (x) => (String(x).toLowerCase().match(/[a-z0-9]+/g) || []).filter((w) => w !== 'milk'); // case and the word “milk” are ignored: “Oat milk” = “oat”
 const isDefault = (name) => { const w = words(name); return defaults.some((d) => { const dw = words(d); return dw.length && dw.every((x) => w.includes(x)); }); }; // "oat milk" matches "Oat milk", "decaf" matches "Decaf shot"
-const road = (a) => String(a || '').split(',').map((x) => x.trim().replace(/^\d+[a-z]?(\s*[-–/]\s*\d+[a-z]?)?\s+/i, '')).find((x) => /[a-z]/i.test(x) && !/^(unit|flat|suite|shop|floor)\b/i.test(x)) || a;
+const road = (a) => String(a || '').split(',').map((x) => x.trim().replace(/^\d+[a-z]?(\s*[-\u2013/]\s*\d+[a-z]?)?\s+/i, '')).find((x) => /[a-z]/i.test(x) && !/^(unit|flat|suite|shop|floor)\b/i.test(x)) || a;
 const fmtDay = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 const hyg = (r) => (/^[0-5]$/.test(r || '') ? `Hygiene ${r}/5` : /^(pass|improvement required)$/i.test(r || '') ? `Hygiene: ${r}` : '');
 const rewardText = (L) => L.type === 'product' ? (L.category ? `a free item from ${L.itemName || 'the menu'}` : `a free ${L.itemName || 'item'}`) : (L.type === 'percent' ? (L.value === 100 ? 'a free order' : L.value + '% off') : gbp(L.value) + ' off') + (L.type === 'percent' && L.cap ? ` (up to ${gbp(L.cap)})` : '');
-const upText = (u) => `${u.kind === 'hours' ? `Special hours ${u.open}–${u.close}` : 'Closed'} ${u.from === u.to ? fmtDay(u.from) : fmtDay(u.from) + ' – ' + fmtDay(u.to)}${u.note ? ' · ' + u.note : ''}`;
+const upText = (u) => `${u.kind === 'hours' ? `Special hours ${u.open} to ${u.close}` : 'Closed'} ${u.from === u.to ? fmtDay(u.from) : fmtDay(u.from) + ' to ' + fmtDay(u.to)}${u.note ? ' · ' + u.note : ''}`;
 const save = () => { ls.set('cart', cart); ls.set('favs', favs); ls.set('orders', orders); };
 const nav = (title, back) => H`<div class="nav"><button data-go="${back}"><span class="bk"></span>Back</button><b>${title}</b><span style="width:60px"></span></div>`;
 const logo = (c) => c.logo ? H`<img class="logo" src="${c.logo}" alt="">` : H`<div class="logo" style="background:${c.color};color:${onColor(c.color)}">${c.name[0]}</div>`;
@@ -71,7 +71,6 @@ const sk2 = (f) => `${f.cafeId}|${f.itemId}|${JSON.stringify(Object.entries(f.se
 const union = (a, b, key) => [...new Map([...a, ...b].map((v) => [key(v), v])).values()].slice(0, 100);
 const unionFavs = (a, b) => union(a, b, sk2), unionCafes = (a, b) => union(a, b, (c) => c.branchId ?? 'm' + c.id);
 
-// A saved café is one specific branch (old saves without a branch match any branch of that café).
 // A saved café is identified by its branch id (unique across the platform). Old saves without one match the café's first branch until upgraded.
 const favMatch = (c, id, br) => (c.branchId != null ? c.branchId === br : c.id === id);
 const isFavCafe = (id, br) => favCafes.some((c) => favMatch(c, id, br));
@@ -126,7 +125,7 @@ app.addEventListener('click', async (e) => {
       if (cafe?.id !== f.cafeId) await loadCafe(f.cafeId);
       const it = itemOf(f.itemId); if (!it?.available) throw new Error('No longer available');
       priceLine(it, f.sel); if (addToCart(it, f.sel, 1)) { toast('Added to basket'); if ($('#myfavs')) renderMenu(); }
-    } catch (err) { toast(err.message.startsWith('Choose') || err.message.startsWith('Invalid') ? 'Options changed – re-add from the menu' : err.message); }
+    } catch (err) { toast(err.message.startsWith('Choose') || err.message.startsWith('Invalid') ? 'Options have changed. Add it again from the menu.' : err.message); }
   }
   if (a === 'push') enablePush(b.dataset.id);
   if (a === 'alon') { allergensOn = b.checked; ls.set('allergensOn', allergensOn); settingsView(); }
@@ -134,7 +133,7 @@ app.addEventListener('click', async (e) => {
   if (a === 'dadd') addDefault();
   if (a === 'codesend') {
     const email = $('#se').value.trim();
-    try { await api('/me/code', { email }); signin = { email }; settingsView(); toast('Code sent – check your email'); } catch (err) { toast(err.message); }
+    try { await api('/me/code', { email }); signin = { email }; settingsView(); toast('Code sent. Check your email.'); } catch (err) { toast(err.message); }
   }
   if (a === 'codeverify') {
     try {
@@ -211,10 +210,9 @@ async function homeView() {
     <div class="group"><div class="row"><input id="q" class="field" style="padding:0;background:none" placeholder="Search cafés by name" type="search" autocomplete="off" enterkeyhint="search"></div></div>
     <div class="chips" id="vw" style="margin-top:10px"><button class="chip on" data-v="list">List</button><button class="chip" data-v="map">Map</button></div>
     <div id="mapbox" hidden><div id="map"></div></div>
-    <div id="saved"></div><h3 id="lh">Open near you</h3><div id="list"><div class="spin"></div></div><div id="loc"></div></div>`.raw;
+    <div id="saved"></div><h3 id="lh">Cafés near you</h3><div id="list"><div class="spin"></div></div><div id="loc"></div></div>`.raw;
   installBanner();
-  const pos = ls.get('pos') || await locate();
-  let list = [], seq = 0;
+  let pos = ls.get('pos'), list = [], seq = 0;
   let map, layer, mode = 'list';
   const drawMap = async () => {
     if (mode !== 'map') return;
@@ -243,9 +241,9 @@ async function homeView() {
     const q = $('#q').value.trim();
     const rest = list; // favourite cafés live in the Favourites tab only
     $('#saved').innerHTML = '';
-    $('#lh').textContent = q ? 'Results' : 'Open near you';
+    $('#lh').textContent = q ? 'Results' : pos ? 'Cafés near you' : 'Cafés';
     $('#list').innerHTML = H`${rest.length ? H`<div class="group">${rest.map(cafeRow)}</div>`
-      : H`<div class="empty">${q ? 'No cafés match “' + q + '”.' : 'No supported cafés ' + (pos ? 'near you yet' : 'found') + '.'}</div>`}`.raw;
+      : H`<div class="empty">${q ? 'No cafés match “' + q + '”.' : 'No cafés ' + (pos ? 'near you yet' : 'found') + '.'}</div>`}`.raw;
   };
   const load = async () => {
     const my = ++seq, q = $('#q').value.trim();
@@ -259,7 +257,8 @@ async function homeView() {
       <div class="row"><input id="pc" class="field" style="padding:0;background:none" placeholder="Enter a postcode" autocapitalize="characters"><button data-a="pc" style="text-decoration:underline;font-weight:700">Search</button></div>
       <button class="row" data-a="loc"><span style="text-decoration:underline;font-weight:700">Use my current location</span></button>
       ${standalone() ? '' : H`<button class="row" data-a="install"><span style="text-decoration:underline;font-weight:700">Add Docket to my Home Screen</span></button>`}</div>`.raw;
-  await load();
+  await load(); // show cafés at once, then re-sort by distance when the device answers (the location prompt can take a while)
+  if (!pos) locate().then((p) => { if (p && window.redrawHome === draw && $('#q')) { pos = p; load(); } });
 }
 
 // ---------- menu ----------
@@ -279,8 +278,9 @@ let menuQ = '', menuCat = 0, menuFor = null, menuDiet = []; // search text + sel
 const flagged = (i) => [...new Set([...(i.allergens || []), ...i.options.flatMap((g) => g.choices.flatMap((c) => c.allergens || []))])].filter((a) => av().includes(a)); // item or any option
 const itemRow = (i) => H`<button class="row ${i.available ? '' : 'off'}" ${i.available ? H`data-item="${i.id}"` : H`disabled`}>
   <div class="grow"><div class="t"><span>${i.name}</span><i></i><b>${i.available ? gbp(i.price_pence) : 'Sold out'}</b></div>${i.description ? H`<div class="d">${i.description}</div>` : ''}
-    ${(i.dietary || []).length ? H`<div class="diet">${i.dietary.map((d) => H`<span>${DIETARY.find((x) => x[0] === d)?.[1] || d}</span>`)}</div>` : ''}
-    ${allergensOn ? H`${flagged(i).length ? H`<div class="al warn">⚠ Contains ${allergenText(flagged(i))}</div>` : ''}${(i.allergens || []).length ? H`<div class="al">Contains: ${allergenText(i.allergens)}</div>` : ''}` : ''}</div>
+    ${i.alcohol ? H`<div class="diet"><span>Alcohol · 18+ · table service only</span></div>` : ''}
+    ${(i.dietary || []).length ? H`<div class="diet">${i.dietary.filter((d) => DIETARY.some((x) => x[0] === d)).map((d) => H`<span>${DIETARY.find((x) => x[0] === d)[1]}</span>`)}</div>` : ''}
+    ${allergensOn ? H`${flagged(i).length ? H`<div class="al warn">⚠ Contains ${allergenText(flagged(i))}</div>` : ''}${(i.allergens || []).length ? H`<div class="al">Contains: ${allergenText(i.allergens)}</div>` : i.no_allergens ? H`<div class="al">No allergens</div>` : ''}` : ''}</div>
   ${i.available ? H`<span class="add">+</span>` : ''}</button>`;
 function drawItems() {
   const q = menuQ.trim().toLowerCase(), okDiet = (i) => menuDiet.every((d) => (i.dietary || []).includes(d));
@@ -308,7 +308,7 @@ function renderMenu() {
       ${cafe.closed || cafe.special || cafe.upcoming.length ? H`<div class="row"><span class="sub">${cafe.closed ? '⚠ ' + cafe.closed : cafe.special ? cafe.special : upText(cafe.upcoming[0])}</span></div>` : ''}
       ${cafe.reviews.avg ? H`<div class="row"><span class="sub">${stars(cafe.reviews.avg)} ${cafe.reviews.avg} · ${cafe.reviews.n} reviews</span></div>` : ''}
       ${L.enabled ? H`<div class="row"><span class="sub">🎟 ${cafe.stamps || 0}/${L.needed} Stamps Collected</span></div>` : ''}</div>
-    ${cafe.branches.length > 1 ? H`<h3>Collect from</h3><div class="chips" id="brs">${cafe.branches.map((b) => H`<button class="chip ${b.id === cafe.branchId ? 'on' : ''}" data-br="${b.id}">${b.name}</button>`)}</div>` : ''}
+    ${cafe.branches.length > 1 ? H`<h3 id="fromh">Collect from</h3><div class="chips" id="brs">${cafe.branches.map((b) => H`<button class="chip ${b.id === cafe.branchId ? 'on' : ''}" data-br="${b.id}">${b.name}</button>`)}</div>` : ''}
     <div class="group" style="margin-top:14px"><div class="row"><input id="mq" class="field" style="padding:0;background:none" type="search" placeholder="Search the menu" autocomplete="off" value="${menuQ}"></div></div>
     ${cats.length > 1 ? H`<div class="chips" id="cats" style="margin-top:10px"><button class="chip ${menuCat ? '' : 'on'}" data-cat="0">All</button>${cats.map((c) => H`<button class="chip ${menuCat === c.id ? 'on' : ''}" data-cat="${c.id}">${c.name}</button>`)}</div>` : ''}
     <div class="chips" id="diets" style="margin-top:10px">${dietUsed.map(([k, l]) => H`<button class="chip ${menuDiet.includes(k) ? 'on' : ''}" data-d="${k}">${l}</button>`)}</div>
@@ -383,8 +383,14 @@ async function checkoutView() {
   if (!cart.lines.length) return (location.hash = '#/');
   const me = ls.get('me', { name: '', email: '' });
   let pickup = cafe.asap ? 'asap' : cafe.slots[0], tip = 5, custom = false, customPence = 0;
-  let service = cafe.sitin ? ls.get('svc', 'takeaway') : 'takeaway', offerOk = null, loy = null, useReward = false, tellKitchen = true, placed = null;
-  const canOrder = !cafe.paused && !cafe.closed && pickup;
+  let service = cafe.sitin || cafe.tables ? ls.get('svc', 'takeaway') : 'takeaway', tableNo = tableMem || qrTable, tipTouched = false, offerOk = null, loy = null, useReward = false, tellKitchen = true, placed = null;
+  if (service === 'sitin' && !cafe.sitin) service = 'takeaway';
+  if (cafe.tables && cafe.asap && qrTable && !svcPicked) service = 'table';
+  const hasAlc = cart.lines.some((l) => itemOf(l.id)?.alcohol), alcBlocked = hasAlc && !(cafe.tables && cafe.asap); // alcohol is table service only
+  if (hasAlc && !alcBlocked) service = 'table';
+  if (service === 'table' && !(cafe.tables && cafe.asap)) service = 'takeaway';
+  if (service === 'table') { pickup = 'asap'; tip = 10; } // table service: 10% suggested tip
+  const canOrder = !cafe.paused && !cafe.closed && pickup && !alcBlocked;
   const pm = () => toMins(pickup === 'asap' ? cafe.asap : pickup);
   const sub = cartSub();
   const isProd = () => cafe.loyalty.type === 'product'; // free-product reward: an item (or any item in a category) must be in the basket
@@ -397,12 +403,14 @@ async function checkoutView() {
   const applePay = !cafe.test && window.ApplePaySession && ApplePaySession.canMakePayments();
 
   app.innerHTML = H`${nav('Checkout', '#/cart')}<div class="wrap">
-    ${canOrder ? '' : H`<div class="banner">${cafe.closed ? cafe.closed : cafe.paused ? 'This café has paused new orders right now.' : 'No pickup times left today.'}</div>`}
+    ${canOrder ? '' : H`<div class="banner">${cafe.closed ? cafe.closed : cafe.paused ? 'This café has paused new orders right now.' : alcBlocked ? 'Your basket has alcohol, which can only be ordered with table service. Table service isn’t available right now, so remove the alcohol to order.' : 'No pickup times left today.'}</div>`}
     ${cafe.estimate && canOrder ? H`<div class="banner">This café prints orders straight to the kitchen, so your ready time is an estimate.</div>` : ''}
-    <h3>Collect from</h3><div class="group"><div class="row"><div class="grow"><div class="t">${cafe.name}${cafe.branchName ? ' · ' + cafe.branchName : ''}</div><div class="d">${cafe.address}</div></div>${cafe.branches.length > 1 ? H`<button data-go="#/c/${cafe.id}/${cafe.branchId}" style="text-decoration:underline;font-weight:700">Change</button>` : ''}</div></div>
-    <h3>Pickup</h3><div class="chips" id="pickup"></div>
-    ${cafe.sitin ? H`<h3>Eating</h3><div class="chips" id="svc"></div>` : ''}
-    ${cafe.offers || cafe.loyalty.enabled ? H`<h3>Offers</h3><div class="group" id="promo"></div>` : ''}
+    <h3 id="fromh">Collect from</h3><div class="group"><div class="row"><div class="grow"><div class="t">${cafe.name}${cafe.branchName ? ' · ' + cafe.branchName : ''}</div><div class="d full">${cafe.address}</div></div>${cafe.branches.length > 1 ? H`<button data-go="#/c/${cafe.id}/${cafe.branchId}" style="text-decoration:underline;font-weight:700">Change</button>` : ''}</div></div>
+    ${cafe.sitin || cafe.tables ? H`<h3>Eating</h3><div class="chips" id="svc"></div>` : ''}
+    <div id="tbl" hidden><h3>Your table</h3><div class="group"><label class="row"><span>Table number</span><input id="tableno" maxlength="20" placeholder="e.g. 12" autocomplete="off" value="${tableNo}"></label></div><div class="sub" style="margin:-12px 0 12px">We’ll bring your order to your table as soon as it’s ready.</div></div>
+    <div id="pickupwrap"><h3>Pickup</h3><div class="chips" id="pickup"></div></div>
+    ${hasAlc ? H`<div class="group"><label class="row"><span class="grow">I’m 18 or over and will show ID if asked<div class="sub">Your basket has alcohol. It’s served at your table only.</div></span><input type="checkbox" class="sw" id="over18"></label></div>` : ''}
+    <h3>Offers</h3><div class="group" id="promo"></div>
     ${av().length ? H`<div class="group"><label class="row"><span class="grow">Tell the café I avoid: ${allergenText(av())}</span><input type="checkbox" class="sw" id="tellk" checked></label></div>` : ''}
     <h3>Tip for the team</h3><div class="chips" id="tips"></div>
     <div id="customtip" hidden><div class="group"><label class="row"><span>Tip (£)</span><input id="ctip" type="number" step="0.01" min="0" max="100" inputmode="decimal" placeholder="0.00"></label></div></div>
@@ -420,7 +428,7 @@ async function checkoutView() {
 
   const drawPickup = () => {
     $('#pickup').innerHTML = H`${cafe.asap ? H`<button class="chip ${pickup === 'asap' ? 'on' : ''}" data-p="asap">As soon as possible · ~${cafe.asap}</button>` : ''}
-      ${cafe.slots.map((t) => H`<button class="chip ${pickup === t ? 'on' : ''}" data-p="${t}">${t}–${String((toMins(t) + 15) / 60 | 0).padStart(2, '0')}:${String((toMins(t) + 15) % 60).padStart(2, '0')}</button>`)}`.raw;
+      ${cafe.slots.map((t) => H`<button class="chip ${pickup === t ? 'on' : ''}" data-p="${t}">${t} to ${String((toMins(t) + 15) / 60 | 0).padStart(2, '0')}:${String((toMins(t) + 15) % 60).padStart(2, '0')}</button>`)}`.raw;
   };
   const drawTotals = () => {
     $('#tips').innerHTML = H`${[0, 5, 10, 15].map((p) => H`<button class="chip ${!custom && tip === p ? 'on' : ''}" data-t="${p}">${p ? p + '% · ' + gbp(Math.round(net() * p / 100)) : 'No tip'}</button>`)}<button class="chip ${custom ? 'on' : ''}" data-t="custom">Custom</button>`.raw;
@@ -431,16 +439,19 @@ async function checkoutView() {
       ${t.tip ? H`<div class="sum"><span>Tip</span><span>${gbp(t.tip)}</span></div>` : ''}
       <div class="sum tot"><span>Total</span><span>${gbp(t.total)}</span></div>`.raw;
     const bl = blocked();
-    $('#blocked').textContent = bl ? `${bl.name} isn't available at that pickup time.` : '';
+    $('#blocked').textContent = bl ? `${bl.name} isn’t available ${service === 'table' ? 'right now' : 'at that pickup time'}.` : '';
     if ($('#pay')) { $('#pay').textContent = cafe.test ? 'Place test order' : t.total ? 'Pay ' + gbp(t.total) : 'Place order'; $('#pay').disabled = !!bl; }
   };
-  const drawSvc = () => { if ($('#svc')) $('#svc').innerHTML = H`<button class="chip ${service === 'takeaway' ? 'on' : ''}" data-s="takeaway">Takeaway</button><button class="chip ${service === 'sitin' ? 'on' : ''}" data-s="sitin">Eat in</button>`.raw; };
+  const drawSvc = () => {
+    if ($('#svc')) $('#svc').innerHTML = H`${hasAlc ? '' : H`<button class="chip ${service === 'takeaway' ? 'on' : ''}" data-s="takeaway">Takeaway</button>`}${cafe.sitin && !hasAlc ? H`<button class="chip ${service === 'sitin' ? 'on' : ''}" data-s="sitin">Eat in</button>` : ''}${cafe.tables && cafe.asap ? H`<button class="chip ${service === 'table' ? 'on' : ''}" data-s="table">Table service</button>` : ''}`.raw;
+    $('#tbl').hidden = service !== 'table'; $('#pickupwrap').hidden = service === 'table'; $('#fromh').textContent = service === 'table' ? 'Ordering from' : 'Collect from';
+  };
   const drawPromo = () => {
     const el = $('#promo'); if (!el) return; const L = cafe.loyalty;
-    el.innerHTML = H`${L.enabled ? H`<div class="row"><div class="grow"><div class="t">${L.name}</div><div class="d">${loy ? (loy.reward ? 'Reward ready: ' + rewardText(L) + (loy.reward && !rewardOk() ? ` – add ${L.category ? 'something from ' + L.itemName : L.itemName ? 'a ' + L.itemName : 'it'} to your basket to claim` : '') : `${loy.stamps}/${loy.needed} Stamps Collected`) : `0/${L.needed} Stamps Collected`}</div></div>
+    el.innerHTML = H`${L.enabled ? H`<div class="row"><div class="grow"><div class="t">${L.name}</div><div class="d">${loy ? (loy.reward ? 'Reward ready: ' + rewardText(L) + (loy.reward && !rewardOk() ? `, add ${L.category ? 'something from ' + L.itemName : L.itemName ? 'a ' + L.itemName : 'it'} to your basket to claim` : '') : `${loy.stamps}/${loy.needed} Stamps Collected`) : `0/${L.needed} Stamps Collected`}</div></div>
         ${acct ? '' : H`<button data-go="#/settings" style="text-decoration:underline;font-weight:700">Sign in</button>`}
         ${rewardOk() ? H`<input type="checkbox" class="sw" data-a="rw" ${useReward ? H`checked` : ''} aria-label="Use reward">` : ''}</div>` : ''}
-      ${cafe.offers && !useReward ? H`<div class="row"><input id="code" class="field" style="padding:0;background:none;text-transform:uppercase" placeholder="Offer code" value="${offerOk ? offerOk.code : ''}" autocapitalize="characters" ${offerOk ? 'readonly' : ''}>
+      ${!useReward ? H`<div class="row"><input id="code" class="field" style="padding:0;background:none;text-transform:uppercase" placeholder="Offer code" value="${offerOk ? offerOk.code : ''}" autocapitalize="characters" ${offerOk ? 'readonly' : ''}>
         <button data-a="code" style="text-decoration:underline;font-weight:700">${offerOk ? 'Remove' : 'Apply'}</button></div>${offerOk ? H`<div class="row"><span class="grow sub">${offerOk.code} · ${offerOk.label} applied</span></div>` : ''}` : ''}`.raw;
   };
   const loadLoy = async () => {
@@ -448,7 +459,8 @@ async function checkoutView() {
     try { const r = await api('/loyalty?cafe=' + cafe.id); loy = r.enabled ? r : null; if (!loy?.reward) useReward = false; drawPromo(); drawTotals(); } catch { /* optional */ }
   };
   drawPickup(); drawTotals(); drawSvc(); drawPromo(); loadLoy();
-  $('#svc')?.addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { service = b.dataset.s; ls.set('svc', service); drawSvc(); } });
+  $('#svc')?.addEventListener('click', (e) => { const b = e.target.closest('[data-s]'); if (b) { service = b.dataset.s; svcPicked = true; ls.set('svc', service === 'table' ? 'takeaway' : service); if (service === 'table') pickup = 'asap'; else if (pickup === 'asap' && !cafe.asap) pickup = cafe.slots[0]; if (!tipTouched && !custom) tip = service === 'table' ? 10 : 5; drawSvc(); drawPickup(); drawTotals(); } });
+  $('#tableno').addEventListener('input', (e) => { tableNo = tableMem = e.target.value.trim(); });
   $('#tellk')?.addEventListener('change', (e) => { tellKitchen = e.target.checked; });
   $('#promo')?.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-a]'); if (!b) return;
@@ -462,7 +474,7 @@ async function checkoutView() {
   $('#tips').onclick = (e) => {
     const b = e.target.closest('[data-t]'); if (!b) return;
     custom = b.dataset.t === 'custom'; $('#customtip').hidden = !custom;
-    if (custom) $('#ctip').focus(); else tip = +b.dataset.t; // always starts at 5%
+    if (custom) $('#ctip').focus(); else { tip = +b.dataset.t; tipTouched = true; } // starts at 5%, or 10% for table service
     drawTotals();
   };
   $('#ctip').oninput = (e) => { customPence = Math.max(0, Math.min(10000, Math.round(parseFloat(e.target.value) * 100) || 0)); drawTotals(); };
@@ -471,12 +483,14 @@ async function checkoutView() {
   const details = () => {
     const name = $('#name').value.trim(), email = $('#email').value.trim();
     if (!name || !/^\S+@\S+\.\S+$/.test(email)) { toast('Enter your name and a valid email'); return null; }
+    if (service === 'table' && !tableNo) { toast('Enter your table number'); return null; }
+    if (hasAlc && !$('#over18')?.checked) { toast('Confirm you’re 18 or over to order alcohol'); return null; }
     ls.set('me', { name, email }); return { name, email };
   };
   const place = (d) => api('/orders', { cafeId: cafe.id, branchId: cafe.branchId, items: cart.lines.map(({ id, qty, sel }) => ({ id, qty, sel })), tipPct: tip, ...(custom ? { tipPence: customPence } : {}), pickup,
-    service, allergy: tellKitchen ? av() : [], offer: useReward ? undefined : offerOk?.code, useReward: useReward && rewardOk(), ...d });
+    service, ...(service === 'table' ? { table: tableNo } : {}), ...(hasAlc ? { over18: true } : {}), allergy: tellKitchen ? av() : [], offer: useReward ? undefined : offerOk?.code, useReward: useReward && rewardOk(), ...d });
   // A declined card keeps the same order, so "try again" doesn't pile up unpaid orders (a changed basket/choice places a fresh one).
-  const ensureOrder = async (d) => { const sig = JSON.stringify([d, pickup, tip, custom ? customPence : null, service, offerOk?.code, useReward, tellKitchen, cart.lines]); if (placed?.sig === sig) return placed.o; const o = await place(d); placed = { sig, o }; return o; };
+  const ensureOrder = async (d) => { const sig = JSON.stringify([d, pickup, tip, custom ? customPence : null, service, tableNo, offerOk?.code, useReward, tellKitchen, cart.lines]); if (placed?.sig === sig) return placed.o; const o = await place(d); placed = { sig, o }; return o; };
   const remember = (id) => { orders.unshift({ id, cafe: cafe.name, at: Date.now() }); orders = orders.slice(0, 30); save(); };
 
   // Card
@@ -512,7 +526,7 @@ async function checkoutView() {
     s.onpaymentauthorized = async (ev) => {
       try {
         const o = await place(d);
-        if (o.total !== total) throw new Error('Prices changed – please review your basket');
+        if (o.total !== total) throw new Error('Prices have changed. Please review your basket.');
         await api(`/orders/${o.id}/pay`, { applePayToken: JSON.stringify(ev.payment.token) });
         s.completePayment({ status: ApplePaySession.STATUS_SUCCESS, ...(o.wallet ? { orderDetails: o.wallet } : {}) }); remember(o.id); // orderDetails hands the order to Apple Wallet's order tracking
         location.hash = '#/o/' + o.id;
@@ -523,6 +537,8 @@ async function checkoutView() {
 }
 
 // ---------- order tracking ----------
+let qrTable = (new URLSearchParams(location.search).get('table') || '').slice(0, 20), svcPicked = false, tableMem = ''; // a table QR code opens the site with ?table=12; remembered for this visit only, never saved
+const stepsOf = (o) => (o.service === 'table' ? [['pending', 'Received'], ['accepted', 'Preparing'], ['ready', 'On its way'], ['completed', 'Served']] : STEPS);
 const STEPS = [['pending', 'Received'], ['accepted', 'Preparing'], ['ready', 'Ready'], ['completed', 'Collected']];
 async function orderView(id) {
   let shown = null;
@@ -535,34 +551,34 @@ async function orderView(id) {
       if (!orders.some((x) => x.id === id)) orders.unshift({ id, cafe: o.cafe.name, at: Date.now() });
       save();
     }
-    const at = STEPS.findIndex(([k]) => k === o.status);
+    const STEP = stepsOf(o), at = STEP.findIndex(([k]) => k === o.status);
     const fresh = shown !== o.status; shown = o.status;
     const canPush = 'PushManager' in window && Notification.permission === 'default' && o.status !== 'completed';
     app.innerHTML = H`${nav('Order #' + o.num, '#/orders')}<div class="wrap">
-      ${o.status === 'refunded' ? H`<div class="banner" style="margin-top:16px">Sorry – the café couldn't make this order. You've been refunded ${gbp(o.total)}; it can take a few days to show.</div>`
+      ${o.status === 'refunded' ? H`<div class="banner" style="margin-top:16px">This order has been refunded. ${gbp(o.refunded || o.total)} is on its way back to your original payment method and can take a few days to show.</div>`
         : o.status === 'awaiting_payment' ? (o.failed
           ? H`<div class="banner" style="margin-top:16px">${o.reason || 'Your payment didn’t go through.'}</div><button class="btn" data-go="#/checkout">Try again</button>`
           : H`<div class="spin"></div><div class="empty" style="padding-top:0">Confirming payment…</div>`)
         : H`<div class="group" style="margin-top:16px">
           <div class="docket-head"><div class="sub">${o.cafe.name}</div><div class="num">#${String(o.num).padStart(3, '0')}</div>
-            <div style="margin:12px 0 4px"><span class="stamp ${o.status} ${fresh ? 'fresh' : ''}">${o.estimate ? (o.status === 'completed' ? 'Collected' : 'Order sent') : STEPS[at][1]}</span></div></div>
-          ${o.estimate ? '' : H`<div class="progress">${STEPS.map(([, label], i) => H`<div class="${i < at ? 'done' : i === at ? 'cur done' : ''}"><i></i>${label}</div>`)}</div>`}
-          <div class="row" style="border-top:1px dashed var(--rule);justify-content:space-between"><span>${o.estimate ? (o.status === 'completed' ? 'Enjoy!' : 'Estimated ready around ' + o.pickup_time) : o.status === 'ready' ? 'Collect from the counter' : o.status === 'completed' ? 'Enjoy!' : 'Pickup ' + (o.asap ? '~' : '') + o.pickup_time}<div class="sub">${o.service === 'sitin' ? 'Eating in' : 'Takeaway'}</div></span><span class="sub">${o.cafe.address}</span></div>
+            <div style="margin:12px 0 4px"><span class="stamp ${o.status} ${fresh ? 'fresh' : ''}">${o.estimate ? (o.status === 'completed' ? (o.service === 'table' ? 'Served' : 'Collected') : 'Order sent') : STEP[at][1]}</span></div></div>
+          ${o.estimate ? '' : H`<div class="progress">${STEP.map(([, label], i) => H`<div class="${i < at ? 'done' : i === at ? 'cur done' : ''}"><i></i>${label}</div>`)}</div>`}
+          <div class="row" style="border-top:1px dashed var(--rule);justify-content:space-between"><span>${o.service === 'table' ? (o.status === 'completed' ? 'Enjoy!' : o.status === 'ready' ? 'On its way to table ' + o.table_no : 'Table ' + o.table_no) : o.estimate ? (o.status === 'completed' ? 'Enjoy!' : 'Estimated ready around ' + o.pickup_time) : o.status === 'ready' ? 'Collect from the counter' : o.status === 'completed' ? 'Enjoy!' : 'Pickup ' + (o.asap ? '~' : '') + o.pickup_time}<div class="sub">${o.service === 'table' ? 'Table service' : o.service === 'sitin' ? 'Eating in' : 'Takeaway'}</div></span><span class="sub">${o.cafe.address}</span></div>
           <div style="padding:8px 16px;border-top:1px dashed var(--rule)">${o.items.map((i) => H`<div class="sum"><span>${i.qty} × ${i.name}<div class="sub">${i.opts.join(', ')}</div></span><span>${gbp(i.unit * i.qty)}</span></div>`)}
             ${o.discount ? H`<div class="sum"><span>${o.offer_code ? 'Offer ' + o.offer_code : 'Loyalty reward'}</span><span>−${gbp(o.discount)}</span></div>` : ''}
             ${o.vat ? H`<div class="sum sub"><span>Includes VAT</span><span>${gbp(o.vat)}</span></div>` : ''}
             ${o.tip ? H`<div class="sum"><span>Tip</span><span>${gbp(o.tip)}</span></div>` : ''}
             <div class="sum tot"><span>Total</span><span>${gbp(o.total)}</span></div>${o.refunded ? H`<div class="sum"><span>Refunded</span><span>−${gbp(o.refunded)}</span></div>` : ''}${barcode(o.id.slice(0, 12))}${(o.allergy || []).length ? H`<div class="al">Allergies sent to the café: ${allergenText(o.allergy)}</div>` : ''}</div></div>
-          ${o.review ? H`<div class="banner">You rated this ${o.review.stars}/5 – thanks!</div>` : o.canReview ? H`<h3>How was it?</h3><div class="group" style="padding:12px 16px"><div class="rate" role="radiogroup" aria-label="Your rating">${[1, 2, 3, 4, 5].map((n) => H`<button class="star" data-a="rate" data-n="${n}" aria-label="${n} star${n > 1 ? 's' : ''}"><svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"/></svg></button>`)}</div>
+          ${o.review ? H`<div class="banner">You rated this ${o.review.stars}/5, thanks!</div>` : o.canReview ? H`<h3>How was it?</h3><div class="group" style="padding:12px 16px"><div class="rate" role="radiogroup" aria-label="Your rating">${[1, 2, 3, 4, 5].map((n) => H`<button class="star" data-a="rate" data-n="${n}" aria-label="${n} star${n > 1 ? 's' : ''}"><svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"/></svg></button>`)}</div>
             <textarea id="rc" class="field" maxlength="280" rows="2" placeholder="Anything to add? (optional)" style="margin-top:8px"></textarea><button class="btn" data-a="sendrev" data-id="${id}" style="margin-top:10px">Send review</button></div>` : ''}
           ${o.status !== 'awaiting_payment' && o.status !== 'refunded' ? H`<button class="btn sec" style="margin-bottom:10px" data-a="again" data-id="${id}">Order again</button>` : ''}
           ${o.status === 'completed' && !o.test ? H`<button class="btn sec" style="margin-bottom:10px" data-a="support" data-id="${id}">Support</button>` : ''}
           ${o.dispute ? disputeCard(o.dispute) : ''}
           ${o.wallet && IOS && ['pending', 'accepted', 'ready'].includes(o.status) ? H`<a class="btn sec" style="margin-bottom:10px;text-decoration:none;text-align:center" href="/api/orders/${id}/wallet">Track in Apple Wallet</a>` : ''}
           ${canPush && !o.estimate ? H`<button class="btn sec" data-a="push" data-id="${id}">Notify me about this order</button>`
-            : o.status !== 'completed' && !o.estimate && !('PushManager' in window) ? H`<div class="sub ground-sub">Add this app to your Home Screen for push alerts – we'll email you too.</div>` : ''}`}</div>`.raw;
+            : o.status !== 'completed' && !o.estimate && !('PushManager' in window) ? H`<div class="sub ground-sub">Add this app to your Home Screen to get push alerts. We’ll email you too.</div>` : ''}`}</div>`.raw;
     if ('PushManager' in window && Notification.permission === 'granted' && ['pending', 'accepted', 'ready'].includes(o.status) && !o.estimate && !ls.get('pushed', []).includes(id)) enablePush(id, true);
-    if (o.status !== 'completed' && !o.failed && !o.canReview) timer = setTimeout(draw, o.estimate ? 30000 : 4000);
+    if (!['completed', 'refunded'].includes(o.status) && !o.failed && !o.canReview) timer = setTimeout(draw, o.estimate ? 30000 : 4000);
   };
   await draw();
 }
@@ -572,7 +588,7 @@ const chats = {}; // order id -> chat history (kept while the page is open)
 const DSTAT = { open: 'Waiting for the café', accepted: 'Refund approved', refused: 'Refund declined', auto_refunded: 'Refunded (the café didn’t reply in time)' };
 const disputeCard = (d) => H`<h3>Refund request</h3><div class="group" style="padding:12px 16px"><b>${DSTAT[d.status] || d.status}</b>
   ${d.status === 'open' ? H`<div class="sub">The café has until ${new Date(d.due_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} to reply. If they don’t, you’re refunded automatically.</div>` : ''}
-  ${d.msgs.map((m) => H`<div class="msg ${m.who === 'merchant' ? 'merchant' : ''}"><small>${m.who === 'customer' ? 'You' : 'The café'}</small>${m.body}${m.pending ? H`<div class="sub">${m.pending} photo${m.pending === 1 ? '' : 's'} being checked for viruses</div>` : ''}${(m.imgs || []).map((n) => H`<a href="/api/disputes/${d.id}/img/${n}" target="_blank" rel="noopener"><img src="/api/disputes/${d.id}/img/${n}" alt="Photo" loading="lazy"></a>`)}</div>`)}</div>`;
+  ${d.msgs.map((m) => H`<div class="msg ${m.who === 'merchant' ? 'merchant' : ''}"><small>${m.who === 'customer' ? 'You' : m.who === 'system' ? 'Docket' : 'The café'}</small>${m.body}${m.pending ? H`<div class="sub">${m.pending} photo${m.pending === 1 ? '' : 's'} being checked for viruses</div>` : ''}${(m.imgs || []).map((n) => H`<a href="/api/disputes/${d.id}/img/${n}" target="_blank" rel="noopener"><img src="/api/disputes/${d.id}/img/${n}" alt="Photo" loading="lazy"></a>`)}</div>`)}</div>`;
 async function supportSheet(id) {
   const o = await api('/orders/' + id), hist = (chats[id] ??= [{ role: 'assistant', content: `Hi! I’m Docket’s support assistant. How can I help with order #${o.num} from ${o.cafe.name}?` }]);
   const left = o.items.map((l, i) => l.qty - ((o.refunded_items || {})[i] || 0)), canRefund = o.status === 'completed' && left.some((n) => n > 0) && !(o.dispute && o.dispute.status === 'open');
@@ -597,12 +613,12 @@ async function supportSheet(id) {
         <label class="btn sec" style="margin-top:8px;display:block;text-align:center">Add photos (up to 3)<input id="rimg" type="file" accept="image/*" multiple hidden></label><div class="sub" id="rf"></div>
         <button class="btn" id="rsend" style="margin-top:10px">Send to ${o.cafe.name}</button><button class="btn sec" id="rback" style="margin-top:8px">Back</button>`);
       let imgs = [];
-      $('#rimg', sh.el).onchange = async (e) => { try { imgs = await Promise.all([...e.target.files].slice(0, 3).map(toPhoto)); $('#rf', sh.el).textContent = imgs.length + ' photo(s) attached'; } catch { toast('Couldn’t read that photo'); } };
+      $('#rimg', sh.el).onchange = async (e) => { try { imgs = await Promise.all([...e.target.files].slice(0, 3).map(toPhoto)); $('#rf', sh.el).textContent = imgs.length + ' photo' + (imgs.length === 1 ? '' : 's') + ' attached'; } catch { toast('Couldn’t read that photo'); } };
       $('#rback', sh.el).onclick = back;
       $('#rsend', sh.el).onclick = async (e) => {
         e.target.disabled = true;
         const items = $$('[data-rq]', sh.el).map((s) => ({ i: +s.dataset.rq, qty: +s.value })).filter((x) => x.qty > 0);
-        try { await api(`/orders/${id}/dispute`, { reason: $('#rr', sh.el).value, items: items.length ? items : undefined, images: imgs }); toast('Sent – the café has 7 days to respond'); sh.close(); if (location.hash === '#/o/' + id) orderView(id); }
+        try { await api(`/orders/${id}/dispute`, { reason: $('#rr', sh.el).value, items: items.length ? items : undefined, images: imgs }); toast('Sent. The café has 7 days to respond.'); sh.close(); if (location.hash === '#/o/' + id) orderView(id); }
         catch (x) { toast(x.message); e.target.disabled = false; }
       };
     } else {
@@ -613,7 +629,7 @@ async function supportSheet(id) {
       $('#rback', sh.el).onclick = back;
       $('#csubmit', sh.el).onclick = async (e) => {
         e.target.disabled = true;
-        try { await api(`/orders/${id}/complaint`, { summary: $('#cs', sh.el).value, transcript: hist }); toast('Thanks – we’ll look into it'); sh.close(); }
+        try { await api(`/orders/${id}/complaint`, { summary: $('#cs', sh.el).value, transcript: hist }); toast('Thanks. We’ll look into it.'); sh.close(); }
         catch (x) { toast(x.message); e.target.disabled = false; }
       };
     }
@@ -642,7 +658,7 @@ async function enablePush(id, quiet) { // quiet = permission already granted ear
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     await api(`/orders/${id}/push`, { sub: sub.toJSON() });
     const done = ls.get('pushed', []); ls.set('pushed', [...done, id].slice(-50));
-    if (!quiet) toast("We'll keep you posted on this order");
+    if (!quiet) toast('We’ll keep you posted on this order');
   } catch (e) { if (!quiet) toast(e.message); }
 }
 
@@ -673,7 +689,7 @@ function settingsView() {
       : signin ? H`<div class="row"><span class="sub">We emailed a 6-digit code to ${signin.email}.</span></div>
         <div class="row"><input id="sc" class="field" style="padding:0;background:none;letter-spacing:.3em" placeholder="000000" inputmode="numeric" autocomplete="one-time-code" maxlength="6"><button data-a="codeverify" style="text-decoration:underline;font-weight:700">Sign in</button></div>
         <button class="row sub" data-a="codeback" style="text-decoration:underline">Use a different email</button>`
-      : H`<div class="row"><span class="sub">Sign in to keep favourites and loyalty stamps on every device. No password – we email you a code.</span></div>
+      : H`<div class="row"><span class="sub">Sign in to keep favourites and loyalty stamps on every device. No password: we email you a code.</span></div>
         <div class="row"><input id="se" class="field" type="email" style="padding:0;background:none" placeholder="Email" inputmode="email" autocomplete="email"><button data-a="codesend" style="text-decoration:underline;font-weight:700">Send code</button></div>`}</div>
     <h3>Allergens</h3><div class="group"><label class="row"><span class="grow">Show allergen information<div class="sub">Shows what each dish contains and warns you about allergens you avoid.</div></span><input type="checkbox" class="sw" data-a="alon" ${allergensOn ? H`checked` : ''}></label></div>
     ${allergensOn ? H`<h3>Allergens I avoid</h3><div class="sub" style="margin-bottom:10px">Dishes containing these are flagged on every menu, and you can tell the café when you order.</div>

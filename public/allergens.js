@@ -7,7 +7,7 @@ export const allergenText = (a) => (a || []).map((k) => L[k]).filter(Boolean).jo
 // everything in the item plus the chosen customisations: sel = { groupIndex: [choiceIndex] }
 export const itemAllergens = (it, sel = {}) => cleanAllergens([...(it.allergens || []), ...it.options.flatMap((g, gi) => (sel[gi] || []).flatMap((ci) => g.choices[ci]?.allergens || []))]);
 
-// Dietary tags merchants can put on items (customers filter by them). Not legal claims – the café is responsible for accuracy.
-export const DIETARY = [['vegetarian', 'Vegetarian'], ['vegan', 'Vegan'], ['gluten-free', 'Gluten-free'], ['dairy-free', 'Dairy-free'], ['halal', 'Halal']];
+// Dietary tags merchants can put on items (customers filter by them). Not legal claims, the café is responsible for accuracy.
+export const DIETARY = [['vegetarian', 'Vegetarian'], ['vegan', 'Vegan'], ['gluten-free', 'Gluten-free'], ['dairy-free', 'Dairy-free']];
 const D = Object.fromEntries(DIETARY);
 export const cleanDietary = (a) => [...new Set(Array.isArray(a) ? a : [])].filter((k) => k in D);
