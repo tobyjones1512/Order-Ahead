@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Open your café on Docket</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#CDD3DC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1013" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="preload" href="/fonts/Doto-900.woff2" as="font" type="font/woff2" crossorigin>
+<script src="/sandbox.js" defer></script>
+<style>
+@font-face{font-family:"Chivo Mono";font-weight:400;font-display:swap;src:url(/fonts/ChivoMono-400.woff2) format("woff2")}
+@font-face{font-family:"Chivo Mono";font-weight:700;font-display:swap;src:url(/fonts/ChivoMono-700.woff2) format("woff2")}
+@font-face{font-family:"Doto";font-weight:900;font-display:swap;src:url(/fonts/Doto-900.woff2) format("woff2")}
+:root{--ground:#CDD3DC;--text:#14161B;--gsub:#3F4550;--paper:#FBFBF8;--ink:#14161B;--sub:#565C69;--rule:rgba(20,22,27,.4);--fill:rgba(20,22,27,.07);
+  --accent:#2B39F0;--on:#fff;--red:#C42F17;--green:#0F6B37;
+  --mono:"Chivo Mono",ui-monospace,"SF Mono",Menlo,monospace;--dot:"Doto","Chivo Mono",ui-monospace,monospace;--ease:cubic-bezier(.19,1,.22,1)}
+@media(prefers-color-scheme:dark){:root{--ground:#0E1013;--text:#ECEDEF;--gsub:#A3A9B5}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;background:var(--ground);color:var(--text);font:400 16px/1.5 var(--mono);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
+button,input{font:inherit;color:inherit}
+.stage{max-width:980px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:28px;grid-template-columns:1fr;align-items:start}
+@media(min-width:860px){.stage{grid-template-columns:minmax(0,1fr) 340px;padding-top:48px}.docket-col{position:sticky;top:32px}}
+.top{display:flex;justify-content:space-between;align-items:center;font:700 12px var(--mono);letter-spacing:.18em;text-transform:uppercase;grid-column:1/-1}
+.dots{display:flex;gap:6px}.dots i{width:22px;height:5px;border-radius:3px;background:var(--rule);transition:background .4s,width .4s var(--ease)}.dots i.on{background:var(--accent);width:34px}
+/* ---- question column ---- */
+.q{min-height:340px}
+.step{animation:in .6s var(--ease) both}
+.step.out{animation:out .25s ease-in both}
+@keyframes in{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes out{to{opacity:0;transform:translateX(-30px)}}
+.k{font:700 12px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--gsub);margin:0 0 10px}
+h1{font:900 clamp(34px,7vw,52px)/1.02 var(--dot);margin:0 0 14px;letter-spacing:.01em}
+.lede{color:var(--gsub);margin:0 0 22px;max-width:46ch}
+.caret::after{content:"";display:inline-block;width:.5em;height:1em;background:var(--accent);margin-left:4px;vertical-align:-.12em;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.field{display:block;width:100%;background:transparent;border:0;border-bottom:3px solid var(--text);padding:10px 2px;font:700 clamp(22px,5vw,30px) var(--mono);outline:0;transition:border-color .2s}
+.field:focus{border-color:var(--accent)}.field::placeholder{color:var(--gsub);opacity:.55}
+.field.sm{font-size:18px;border-bottom-width:2px;margin-top:14px}
+.err{color:var(--red);font-weight:700;min-height:1.5em;margin:8px 0 0}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:22px}
+.btn{background:var(--accent);color:var(--on);border:0;border-radius:12px;padding:15px 24px;font:700 14px var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:transform .2s var(--ease),filter .2s}
+.btn:hover{transform:translateY(-2px)}.btn:active{transform:scale(.97)}.btn[disabled]{opacity:.5;pointer-events:none}
+.back{background:none;border:0;text-decoration:underline;cursor:pointer;color:var(--gsub);padding:10px}
+.hint{font-size:13px;color:var(--gsub);margin-top:6px}
+/* swatches */
+.sw{display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 4px}
+.sw button{width:52px;height:52px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform .3s var(--ease);box-shadow:0 0 0 2px var(--rule)}
+.sw button:hover{transform:scale(1.12) rotate(-6deg)}.sw button[aria-pressed=true]{border-color:var(--ground);box-shadow:0 0 0 4px var(--text);transform:scale(1.1)}
+.sw label{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;cursor:pointer;background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red);box-shadow:0 0 0 2px var(--rule);position:relative}
+.sw label input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+/* hours */
+.hrs{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:420px}
+.hrs label{font:700 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gsub)}
+.hrs input{display:block;width:100%;margin-top:6px;background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:10px;padding:12px;font:700 26px var(--mono)}
+.sun{height:14px;border-radius:7px;margin:18px 0 4px;max-width:420px;background:linear-gradient(90deg,var(--fill) var(--a),var(--accent) var(--a) var(--b),var(--fill) var(--b));transition:background .3s}
+/* prep cups */
+.cups{display:flex;align-items:center;gap:16px;margin-top:6px}
+.cups .n{font:900 64px/1 var(--dot);min-width:2.2ch;text-align:center}
+.cups button{width:52px;height:52px;border-radius:50%;border:2px solid var(--text);background:none;font:700 26px var(--mono);cursor:pointer;transition:transform .15s}
+.cups button:active{transform:scale(.88)}
+.cup{display:flex;gap:4px;margin-top:14px;min-height:34px;flex-wrap:wrap}
+.cup i{font-style:normal;font-size:24px;animation:pop .35s var(--ease) both}
+@keyframes pop{from{transform:scale(0) rotate(-40deg)}}
+/* toggle cards */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:440px}
+.cards button{background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:14px;padding:18px 14px;text-align:left;cursor:pointer;font:700 15px/1.3 var(--mono);transition:transform .3s var(--ease),background .2s}
+.cards button small{display:block;font:400 12px/1.4 var(--mono);color:var(--sub);margin-top:4px}
+.cards button[aria-pressed=true]{background:var(--accent);color:var(--on);transform:translateY(-4px) rotate(-1deg)}.cards button[aria-pressed=true] small{color:inherit;opacity:.85}
+/* stamp-and-hold */
+.hold{position:relative;width:170px;height:170px;border-radius:50%;border:0;background:var(--paper);color:var(--ink);cursor:pointer;font:900 20px var(--mono);letter-spacing:.14em;text-transform:uppercase;display:grid;place-items:center;margin:8px 0;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:0 0 0 3px var(--ink)}
+.hold svg{position:absolute;inset:-9px;width:calc(100% + 18px);height:calc(100% + 18px);transform:rotate(-90deg);pointer-events:none}
+.hold circle{fill:none;stroke:var(--accent);stroke-width:8;stroke-linecap:round;stroke-dasharray:540;stroke-dashoffset:540}
+.terms{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;cursor:pointer;max-width:46ch}
+.terms input{width:22px;height:22px;margin-top:2px;accent-color:var(--accent);flex:none}
+/* ---- docket ---- */
+.docket-col{perspective:900px}
+.docket{background:var(--paper);color:var(--ink);border-radius:6px;box-shadow:0 18px 40px rgba(20,22,27,.28);position:relative;transform-origin:top;animation:print 1.1s var(--ease) both;--brand:var(--accent);--on-brand:#fff}
+@keyframes print{from{transform:translateY(-60px) rotateX(-50deg);opacity:0}}
+.docket .band{background:var(--brand);color:var(--on-brand);padding:18px 18px 14px;border-radius:6px 6px 0 0;font:900 26px/1.05 var(--dot);text-transform:uppercase;min-height:64px;word-break:break-word;transition:background .5s,color .5s}
+.docket .body{padding:16px 18px 10px;font-size:13px}
+.docket .l{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--rule);animation:line .5s var(--ease) both}
+.docket .l:last-child{border:0}.docket .l b{text-align:right;word-break:break-word}.docket .l span{color:var(--sub)}
+@keyframes line{from{opacity:0;transform:translateX(-14px)}}
+.teeth{height:8px;background:linear-gradient(135deg,var(--ground) 4px,transparent 0) 0 0/8px 8px,linear-gradient(225deg,var(--ground) 4px,transparent 0) 0 0/8px 8px;background-color:var(--paper);border-radius:0 0 2px 2px}
+.stamp{position:absolute;right:14px;bottom:30px;border:4px solid var(--red);color:var(--red);padding:6px 14px;font:900 22px var(--mono);letter-spacing:.2em;text-transform:uppercase;border-radius:6px;transform:rotate(-12deg) scale(3);opacity:0;pointer-events:none}
+.docket.done .stamp{animation:stamp .5s cubic-bezier(.3,1.6,.5,1) forwards}
+@keyframes stamp{60%{opacity:1}to{opacity:.9;transform:rotate(-12deg) scale(1)}}
+.docket.done{animation:thud .35s .35s}
+@keyframes thud{40%{transform:translateY(5px)}}
+/* confetti */
+.c{position:fixed;top:-10px;width:9px;height:14px;z-index:9;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translate(var(--x),105vh) rotate(var(--r))}}
+.next{margin:22px 0 0;padding:0;list-style:none;counter-reset:n;max-width:46ch}
+.next li{counter-increment:n;padding:12px 0 12px 44px;position:relative;border-bottom:1px dashed var(--rule);opacity:0;animation:in .6s var(--ease) forwards}
+.next li::before{content:counter(n);position:absolute;left:0;top:8px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--on);display:grid;place-items:center;font-weight:700}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top"><span>Docket · Open your café</span><div class="dots" id="dots" aria-hidden="true"></div></div>
+  <main class="q" id="q" aria-live="polite"></main>
+  <aside class="docket-col" aria-label="Your café's docket, filling in as you answer">
+    <div class="docket" id="docket">
+      <div class="band" id="d-name">Your café</div>
+      <div class="body" id="d-body"></div>
+      <div class="teeth"></div>
+      <div class="stamp">Welcome</div>
+    </div>
+  </aside>
+</div>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const P = new URLSearchParams(location.search);
+const D = { name: '', postcode: '', address: '', color: '#2B39F0', open: '07:30', close: '16:30', prep: 10, vat: false, contact: '', phone: '', email: '', terms: false, ref: P.get('ref') || '' };
+const COLORS = ['#2B39F0', '#C42F17', '#0F6B37', '#8F5200', '#7A2BC4', '#0E7C86', '#D6336C', '#14161B'];
+const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+const mins = (t) => +t.slice(0, 2) * 60 + +t.slice(3);
+
+/* docket preview */
+const LINES = { postcode: ['Postcode', () => D.postcode.toUpperCase()], address: ['Address', () => D.address], hours: ['Open', () => `${D.open} – ${D.close}`], prep: ['Prep', () => D.prep + ' min'], vat: ['VAT', () => (D.vat ? 'Registered' : 'Not registered')], contact: ['Contact', () => D.contact], email: ['Email', () => D.email] };
+const shown = new Set();
+function paint() {
+  const dk = $('#docket');
+  dk.style.setProperty('--brand', D.color); dk.style.setProperty('--on-brand', lum(D.color) > .4 ? '#14161B' : '#fff');
+  $('#d-name').textContent = D.name || 'Your café';
+  const b = $('#d-body');
+  for (const k of shown) {
+    const [l, f] = LINES[k], v = f(); let row = b.querySelector(`[data-k=${k}]`);
+    if (!v) { row?.remove(); continue; }
+    if (!row) { row = document.createElement('div'); row.className = 'l'; row.dataset.k = k; row.innerHTML = `<span>${l}</span><b></b>`; b.append(row); }
+    row.lastChild.textContent = v;
+  }
+}
+const show = (...k) => { k.forEach((x) => shown.add(x)); paint(); };
+
+/* steps */
+const T = (h) => h; // template passthrough
+const STEPS = [
+  { id: 'hi', render: () => `<p class="k">Welcome</p><h1>Let’s open your café.</h1><p class="lede">Eight quick questions. Watch your docket print on the right as you go. No forms, no jargon, about two minutes.</p><div class="row"><button class="btn" data-next>Start</button></div>` },
+  { id: 'name', render: () => `<p class="k">01 · The name</p><h1>What’s your café called?</h1><input class="field" id="f" maxlength="80" placeholder="Ember &amp; Oak" autocomplete="organization" value="${esc(D.name)}">`, field: 'name', min: 2, msg: 'Pop your café name in.', live: (v) => { D.name = v; paint(); } },
+  { id: 'where', render: () => `<p class="k">02 · The place</p><h1>Where do customers collect?</h1><p class="lede">Postcode first. Street address is optional but helps people find you.</p><input class="field" id="f" maxlength="10" placeholder="SW1A 1AA" autocapitalize="characters" autocomplete="postal-code" value="${esc(D.postcode)}"><input class="field sm" id="g" maxlength="120" placeholder="Street address (optional)" autocomplete="street-address" value="${esc(D.address)}">`, field: 'postcode', min: 5, msg: 'We need a full UK postcode.', live: (v) => { D.postcode = v; show('postcode'); }, extra: ['g', 'address', 'address'] },
+  { id: 'colour', render: () => `<p class="k">03 · The look</p><h1>Pick your café’s colour.</h1><p class="lede">It becomes the band on every customer receipt and email. Change it any time. Logo comes later in your dashboard.</p><div class="sw" id="sw">${COLORS.map((c) => `<button aria-label="Colour ${c}" aria-pressed="${c.toLowerCase() === D.color.toLowerCase()}" data-c="${c}" style="background:${c}"></button>`).join('')}<label title="Custom colour"><input type="color" id="cc" value="${D.color}" aria-label="Custom colour"></label></div>`, after() { const set = (c) => { D.color = c; document.querySelectorAll('#sw button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.c.toLowerCase() === c.toLowerCase())); paint(); }; document.querySelectorAll('#sw button').forEach((b) => (b.onclick = () => set(b.dataset.c))); $('#cc').oninput = (e) => set(e.target.value); } },
+  { id: 'hours', render: () => `<p class="k">04 · The hours</p><h1>When are you open?</h1><div class="hrs"><div><label for="o">Opens</label><input type="time" id="o" value="${D.open}"></div><div><label for="c">Closes</label><input type="time" id="c" value="${D.close}"></div></div><div class="sun" id="sun"></div><p class="hint">Customers can only order inside these hours. Holidays and one-off closures are set later.</p><p class="err" id="e"></p>`, after() { const u = () => { D.open = $('#o').value || D.open; D.close = $('#c').value || D.close; $('#sun').style.cssText = `--a:${mins(D.open) / 14.4}%;--b:${mins(D.close) / 14.4}%`; show('hours'); }; $('#o').oninput = $('#c').oninput = u; u(); }, check: () => (mins(D.close) > mins(D.open) ? '' : 'Closing time must be after opening time.') },
+  { id: 'prep', render: () => `<p class="k">05 · The speed</p><h1>How long does an average order take?</h1><div class="cups"><button id="m" aria-label="Less time">–</button><div class="n" id="n"></div><button id="p" aria-label="More time">+</button></div><div class="cup" id="cup" aria-hidden="true"></div><p class="hint">Minutes from accepting an order to it being ready. Customers see this when they pick a pickup time.</p>`, after() { const u = () => { $('#n').textContent = D.prep; $('#cup').innerHTML = Array.from({ length: Math.min(12, Math.ceil(D.prep / 2)) }, (_, i) => `<i style="animation-delay:${i * 30}ms">☕️</i>`).join(''); show('prep'); }; $('#m').onclick = () => { D.prep = Math.max(0, D.prep - 5); u(); }; $('#p').onclick = () => { D.prep = Math.min(120, D.prep + 5); u(); }; u(); } },
+  { id: 'vat', render: () => `<p class="k">06 · The tax</p><h1>Are you VAT registered?</h1><div class="cards" id="v"><button data-v="1" aria-pressed="${D.vat}">Yes<small>VAT shown on receipts</small></button><button data-v="0" aria-pressed="${!D.vat}">No<small>Most small cafés</small></button></div><p class="hint">Menu prices always include VAT. You can add your VAT number later.</p>`, after() { document.querySelectorAll('#v button').forEach((b) => (b.onclick = () => { D.vat = b.dataset.v === '1'; document.querySelectorAll('#v button').forEach((x) => x.setAttribute('aria-pressed', x === b)); show('vat'); })); show('vat'); } },
+  { id: 'you', render: () => `<p class="k">07 · You</p><h1>Who should we talk to?</h1><input class="field" id="f" maxlength="80" placeholder="Your name" autocomplete="name" value="${esc(D.contact)}"><input class="field sm" id="g" maxlength="30" placeholder="Phone (optional)" type="tel" autocomplete="tel" value="${esc(D.phone)}"><input class="field sm" id="h" maxlength="120" placeholder="Email: your sign-in link goes here" type="email" autocomplete="email" inputmode="email" value="${esc(D.email)}">`, field: 'contact', min: 2, msg: 'Tell us your name.', live: (v) => { D.contact = v; show('contact'); }, extra: ['g', 'phone', 'phone'], check: () => { D.email = $('#h').value.trim(); show('email'); return /^\S+@\S+\.\S+$/.test(D.email) ? '' : 'Enter a valid email so we can send your sign-in link.'; } },
+  { id: 'sign', render: () => `<p class="k">08 · Make it official</p><h1>Stamp it.</h1><label class="terms"><input type="checkbox" id="t" ${D.terms ? 'checked' : ''}><span>I’ve read and agree to the <a href="/terms/" target="_blank" rel="noopener">Merchant Terms</a>. Docket takes a flat 5% of each order.</span></label><p class="hint" style="margin-top:18px">Press and hold to stamp your docket.</p><button class="hold" id="h" aria-label="Press and hold to submit"><svg viewBox="0 0 190 190"><circle cx="95" cy="95" r="86"/></svg><span id="hl">Hold</span></button><p class="err" id="e"></p>`, after: signStep },
+];
+let i = 0; const q = $('#q');
+$('#dots').innerHTML = STEPS.map(() => '<i></i>').join('');
+function go(n, dir = 1) {
+  const old = q.firstElementChild, mount = () => {
+    i = n; const s = STEPS[i]; q.innerHTML = `<div class="step">${s.render()}<p class="err" id="err"></p><div class="row">${i && s.id !== 'sign' ? '<button class="btn" data-next>Next</button>' : ''}${i ? '<button class="back" data-back>Back</button>' : ''}</div></div>`;
+    if (s.id === 'hi') q.querySelector('.row .back')?.remove();
+    document.querySelectorAll('#dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+    const f = $('#f'); if (f) { f.classList.add('caret'); s.live && (f.oninput = () => s.live(f.value)); f.onfocus = () => f.classList.remove('caret'); f.onkeydown = (e) => e.key === 'Enter' && next(); if (s.live) s.live(f.value); setTimeout(() => f.focus({ preventScroll: true }), 350); }
+    s.extra && ($('#' + s.extra[0]).oninput = (e) => { D[s.extra[1]] = e.target.value; show(s.extra[2]); });
+    s.after && s.after();
+    q.querySelector('[data-next]')?.addEventListener('click', next); q.querySelector('[data-back]')?.addEventListener('click', () => go(i - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  if (old && !matchMedia('(prefers-reduced-motion:reduce)').matches) { old.classList.add('out'); setTimeout(mount, 230); } else mount();
+}
+function next() {
+  const s = STEPS[i], f = $('#f'); let m = '';
+  if (s.field && f) { const v = f.value.trim(); if (v.length < s.min) m = s.msg; else D[s.field] = v; }
+  if (!m && s.check) m = s.check();
+  if (m) { const e = $('#err'); e.textContent = m; ($('#f') || e).animate?.([{ transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'none' }], 220); return; }
+  go(i + 1);
+}
+
+/* hold-to-stamp */
+function signStep() {
+  const b = $('#h'), ring = b.querySelector('circle'), lab = $('#hl'); let t0 = 0, raf = 0, busy = false;
+  const tick = () => { const p = Math.min(1, (performance.now() - t0) / 1100); ring.style.strokeDashoffset = 540 * (1 - p); if (p >= 1) return submit(); raf = requestAnimationFrame(tick); };
+  const start = (e) => { e.preventDefault(); if (busy) return; if (!$('#t').checked) { $('#e').textContent = 'Tick the Merchant Terms first.'; return; } $('#e').textContent = ''; t0 = performance.now(); lab.textContent = 'Keep holding'; navigator.vibrate?.(15); raf = requestAnimationFrame(tick); };
+  const stop = () => { if (busy) return; cancelAnimationFrame(raf); ring.style.transition = 'stroke-dashoffset .3s'; ring.style.strokeDashoffset = 540; setTimeout(() => (ring.style.transition = ''), 320); lab.textContent = 'Hold'; };
+  b.onpointerdown = start; b.onpointerup = b.onpointerleave = b.onpointercancel = stop;
+  b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!$('#t').checked) return ($('#e').textContent = 'Tick the Merchant Terms first.'); submit(); } };
+  $('#t').onchange = (e) => { D.terms = e.target.checked; };
+  async function submit() {
+    if (busy) return; busy = true; lab.textContent = 'Sending…'; ring.style.strokeDashoffset = 0; navigator.vibrate?.([30, 40, 60]);
+    try {
+      const r = await fetch('/api/m/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: D.email, name: D.name, postcode: D.postcode, ref: D.ref,
+        onboard: { address: D.address, color: D.color, open: D.open, close: D.close, prep: D.prep, vat: D.vat, contact: D.contact, phone: D.phone, terms: D.terms } }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Something went wrong');
+      finish();
+    } catch (e) { busy = false; lab.textContent = 'Hold'; ring.style.strokeDashoffset = 540; $('#e').textContent = e.message; }
+  }
+}
+function finish() {
+  $('#docket').classList.add('done'); document.querySelectorAll('#dots i').forEach((d) => d.classList.add('on'));
+  confetti();
+  q.innerHTML = `<div class="step"><p class="k">Done</p><h1>${esc(D.name)} is on Docket.</h1><p class="lede">We’ve emailed a sign-in link to <b>${esc(D.email)}</b>. It works for 15 minutes.</p>
+    <ol class="next"><li style="animation-delay:.5s"><b>Tap the link</b> in your email to open your kitchen.</li><li style="animation-delay:.75s"><b>Add your menu</b> and logo. Prices include VAT.</li><li style="animation-delay:1s"><b>Connect Mollie</b> to get paid. Your café goes live once that’s done.</li></ol>
+    <div class="row"><button class="back" id="again">Wrong email? Start again</button></div></div>`;
+  $('#again').onclick = () => location.reload();
+}
+function confetti() {
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  for (let k = 0; k < 70; k++) { const c = document.createElement('i'); c.className = 'c'; c.style.cssText = `left:${Math.random() * 100}vw;background:${k % 3 ? D.color : COLORS[k % COLORS.length]};--x:${(Math.random() - .5) * 240}px;--r:${Math.random() * 900}deg;animation-duration:${1.6 + Math.random() * 1.6}s;animation-delay:${Math.random() * .4}s`; document.body.append(c); setTimeout(() => c.remove(), 4000); }
+}
+paint(); go(0);
+</script>
+</body>
+</html>

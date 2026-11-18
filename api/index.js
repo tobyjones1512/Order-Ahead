@@ -12,6 +12,7 @@ import * as Q from '../lib/scanq.js';
 import * as D from '../lib/desk.js';
 import * as R from '../lib/review.js';
 import * as L from '../lib/licence.js';
+import { layout, rows, para } from '../lib/mail.js';
 
 const { BASE_URL, SESSION_SECRET, VAPID_PUBLIC_KEY } = process.env;
 // Three sites share this one deployment: customers (BASE_URL = app.placemyorder.online), cafés (MERCHANT_URL) and the owner (ADMIN_URL). Unset = path-based (/m/, /admin/) on BASE_URL.
@@ -585,6 +586,12 @@ route('POST', '/api/m/login', async ({ body: b }) => {
     const name = str(b.name, 80), pc = str(b.postcode, 10).toUpperCase();
     if (!name || !pc) throw bad('There’s no account for that email. Register your café first.');
     Object.assign(t, { n: name, pc, ...(await geocode(pc)) });
+    const o = b.onboard; // answers from the /onboard/ walkthrough, applied when the link is clicked
+    if (o && typeof o === 'object') {
+      if (o.terms !== true) throw bad('Agree to the Merchant Terms to continue');
+      t.o = { address: str(o.address, 120), color: /^#[0-9a-f]{6}$/i.test(o.color) ? o.color : null, open: TIME.test(o.open) ? o.open : null, close: TIME.test(o.close) ? o.close : null,
+        prep: Number.isInteger(o.prep) && o.prep >= 0 && o.prep <= 120 ? o.prep : null, vat: o.vat === true, contact: str(o.contact, 80), phone: str(o.phone, 30), terms: true };
+    }
     if (str(b.ref, 10)) { // referred by another café
       const r = (await sql`select id from merchants where referral_code=${str(b.ref, 10).toUpperCase()}`)[0];
       if (!r) throw bad('That referral code wasn’t found'); t.r = r.id;
@@ -596,13 +603,24 @@ route('GET', '/api/m/verify', async ({ q, res }) => {
   const t = verify(q.get('t'));
   if (!t?.e) { res.redirect(302, MURL + '/?expired=1'); return; }
   const [m] = await sql`insert into merchants (email,name,postcode,lat,lng,referred_by,referral_code) values (${t.e},${t.n || 'My café'},${t.pc || ''},${t.lat ?? null},${t.lng ?? null},${t.r ?? null},upper(substr(md5(random()::text || ${t.e}),1,6)))
-    on conflict (email) do update set email=excluded.email returning id, banned`;
+    on conflict (email) do update set email=excluded.email returning id, banned, (xmax = 0) as fresh`;
   if (m.banned) { res.redirect(302, MURL + '/?banned=1'); return; }
   await sql`insert into branches (merchant_id,name,address,postcode,lat,lng,open_time,close_time,prep_minutes,extra_minutes,paused)
     select id,'Main',address,postcode,lat,lng,open_time,close_time,prep_minutes,extra_minutes,paused from merchants m where m.id=${m.id} and not exists (select 1 from branches b where b.merchant_id=m.id)`;
+  if (m.fresh && t.o) await applyOnboarding(m.id, t);
   setSession(res, m.id);
   res.redirect(302, MURL + '/');
 });
+// New café finished the /onboard/ walkthrough: save its answers, record terms acceptance, tell the Docket team.
+async function applyOnboarding(id, t) {
+  const o = t.o;
+  await sql`update merchants set address=${o.address || ''}, color=coalesce(${o.color},color), open_time=coalesce(${o.open},open_time), close_time=coalesce(${o.close},close_time),
+    prep_minutes=coalesce(${o.prep},prep_minutes), vat_registered=${o.vat}, terms_at=now(), terms_version=${TERMS_VERSION} where id=${id}`;
+  await sql`update branches set address=${o.address || ''}, open_time=coalesce(${o.open},open_time), close_time=coalesce(${o.close},close_time), prep_minutes=coalesce(${o.prep},prep_minutes) where merchant_id=${id}`;
+  const e = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  await sendEmail('hello@thecaffeinemediacompany.com', `New merchant onboarded: ${t.n}`, layout({ cafe: { name: 'Docket', color: o.color || '#2B39F0' }, platform: true, kicker: 'New merchant', title: `${t.n} has onboarded`, stamp: 'New',
+    body: rows([['Café', e(t.n)], ['Email', e(t.e)], ['Postcode', e(t.pc)], ['Address', e(o.address) || '-'], ['Contact', e(o.contact) || '-'], ['Phone', e(o.phone) || '-'], ['Hours', `${o.open || '-'} to ${o.close || '-'}`], ['Prep time', o.prep == null ? '-' : o.prep + ' min'], ['VAT registered', o.vat ? 'Yes' : 'No'], ['Terms v' + TERMS_VERSION, 'Agreed']]) + para('They still need to add a menu and connect Mollie before going live.') })).catch((x) => console.error('onboard mail', x));
+}
 route('POST', '/api/m/logout', ({ res }) => setSession(res, 0));
 // Delete the café account and everything the café put on the platform. Orders stay: they're transaction records (payments, VAT, refunds).
 route('DELETE', '/api/m/account', async ({ m, res, body: b }) => {
