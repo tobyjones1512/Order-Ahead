@@ -921,10 +921,14 @@ route('POST', '/api/orders/:id/dispute', async ({ p, body: b }) => { // refund r
   if (o.test || !m) throw bad('This order can’t be disputed');
   if (o.status === 'refunded' || (o.refunded || 0) >= o.total) throw bad('This order has already been refunded');
   if ((await sql`select 1 from disputes where order_id=${o.id}::uuid and status='open'`).length) throw bad('You already have an open refund request for this order');
-  const reason = str(b.reason, 1500); if (reason.length < 10) throw bad('Please describe what went wrong');
   const done = o.refunded_items || {};
   const items = Array.isArray(b.items) && b.items.length ? b.items.map((x) => ({ i: +x.i, qty: +x.qty })).filter((x, k, a) => Number.isInteger(x.i) && x.i >= 0 && x.i < o.items.length && Number.isInteger(x.qty) && x.qty >= 1 && x.qty <= o.items[x.i].qty - (done[x.i] || 0) && a.findIndex((y) => y.i === x.i) === k) : null;
   if (Array.isArray(b.items) && b.items.length && !items.length) throw bad('Choose the items you want refunded');
+  let reason = str(b.reason, 1500);
+  if (b.missing === true) { // "Missing an item": same dispute, reason is generated from the chosen items
+    if (!items?.length) throw bad('Choose the missing items');
+    reason = str(`Missing from my order: ${items.map((x) => `${x.qty}x ${o.items[x.i].name}`).join(', ')}.${reason ? ' ' + reason : ''}`, 1500);
+  } else if (reason.length < 10) throw bad('Please describe what went wrong');
   const d = (await sql`insert into disputes (order_id,merchant_id,reason,items,due_at) values (${o.id}::uuid,${o.merchant_id},${reason},${items && JSON.stringify(items)}::jsonb,now() + interval '7 days') returning *`)[0];
   await addMsg(d.id, 'customer', reason, await saveImgs(d.id, b.images));
   await notifyDisputeOpened(d, o, m);

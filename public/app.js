@@ -599,17 +599,18 @@ async function supportSheet(id) {
     $('#chat', sh.el).scrollTop = 1e6;
   };
   const acts = (extra) => {
-    $('#act', sh.el).innerHTML = H`${canRefund ? H`<button class="btn sec sm" data-x="refund">Request a refund</button>` : ''}<button class="btn sec sm" data-x="complaint">Report a problem with the café</button>`.raw;
+    $('#act', sh.el).innerHTML = H`${canRefund ? H`<button class="btn sec sm" data-x="missing">Missing an item</button><button class="btn sec sm" data-x="refund">Request a refund</button>` : ''}<button class="btn sec sm" data-x="complaint">Report a problem with the café</button>`.raw;
     if (extra) $(`[data-x="${extra}"]`, sh.el)?.classList.remove('sec');
   };
   const back = () => { sh.set(H`<h2>Support · #${o.num}</h2><div id="chat" style="max-height:42vh;overflow:auto"></div><div id="act" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"></div>
     <div style="display:flex;gap:8px"><input class="field" id="cin" placeholder="Type a message" maxlength="1000" style="flex:1"><button class="btn sm" id="csend" style="flex:none">Send</button></div>`); wire(); draw(); acts(); };
   const form = (kind) => {
-    if (kind === 'refund') {
-      sh.set(H`<h2>Request a refund</h2><p class="sub">Tell ${o.cafe.name} what went wrong. They have 7 days to respond, and if they don’t you’re refunded automatically. Photos help.</p>
+    if (kind === 'refund' || kind === 'missing') {
+      const miss = kind === 'missing';
+      sh.set(H`<h2>${miss ? 'Missing an item' : 'Request a refund'}</h2><p class="sub">${miss ? H`Choose what’s missing from your order. ${o.cafe.name} has 7 days to respond, and if they don’t you’re refunded automatically.` : H`Tell ${o.cafe.name} what went wrong. They have 7 days to respond, and if they don’t you’re refunded automatically. Photos help.`}</p>
         <div class="group">${o.items.map((l, i) => left[i] > 0 ? H`<label class="row"><span class="grow">${l.name}</span><select data-rq="${i}">${Array.from({ length: left[i] + 1 }, (_, k) => H`<option value="${k}">${k}</option>`)}</select></label>` : '')}</div>
-        <div class="sub">Pick the items to refund, or leave all at 0 to ask for the whole order.</div>
-        <textarea class="field" id="rr" rows="4" maxlength="1500" placeholder="What went wrong?" style="margin-top:8px"></textarea>
+        <div class="sub">${miss ? 'Set how many of each item are missing.' : 'Pick the items to refund, or leave all at 0 to ask for the whole order.'}</div>
+        <textarea class="field" id="rr" rows="${miss ? 2 : 4}" maxlength="1500" placeholder="${miss ? 'Anything else we should tell the café? (optional)' : 'What went wrong?'}" style="margin-top:8px"></textarea>
         <label class="btn sec" style="margin-top:8px;display:block;text-align:center">Add photos (up to 3)<input id="rimg" type="file" accept="image/*" multiple hidden></label><div class="sub" id="rf"></div>
         <button class="btn" id="rsend" style="margin-top:10px">Send to ${o.cafe.name}</button><button class="btn sec" id="rback" style="margin-top:8px">Back</button>`);
       let imgs = [];
@@ -618,7 +619,8 @@ async function supportSheet(id) {
       $('#rsend', sh.el).onclick = async (e) => {
         e.target.disabled = true;
         const items = $$('[data-rq]', sh.el).map((s) => ({ i: +s.dataset.rq, qty: +s.value })).filter((x) => x.qty > 0);
-        try { await api(`/orders/${id}/dispute`, { reason: $('#rr', sh.el).value, items: items.length ? items : undefined, images: imgs }); toast('Sent. The café has 7 days to respond.'); sh.close(); if (location.hash === '#/o/' + id) orderView(id); }
+        if (miss && !items.length) { toast('Choose at least one missing item'); e.target.disabled = false; return; }
+        try { await api(`/orders/${id}/dispute`, { reason: $('#rr', sh.el).value, missing: miss || undefined, items: items.length ? items : undefined, images: imgs }); toast('Sent. The café has 7 days to respond.'); sh.close(); if (location.hash === '#/o/' + id) orderView(id); }
         catch (x) { toast(x.message); e.target.disabled = false; }
       };
     } else {
