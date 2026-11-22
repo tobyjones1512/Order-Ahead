@@ -13,6 +13,7 @@ import * as D from '../lib/desk.js';
 import * as R from '../lib/review.js';
 import * as L from '../lib/licence.js';
 import { layout, rows, para } from '../lib/mail.js';
+import * as A from '../lib/apns.js';
 
 const { BASE_URL, SESSION_SECRET, VAPID_PUBLIC_KEY } = process.env;
 // Three sites share this one deployment: customers (BASE_URL = app.placemyorder.online), cafés (MERCHANT_URL) and the owner (ADMIN_URL). Unset = path-based (/m/, /admin/) on BASE_URL.
@@ -27,6 +28,7 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const gbp = (p) => '£' + (p / 100).toFixed(2);
+const changed = (id) => Promise.allSettled([W.pushUpdate(id), A.orderChanged(id)]); // order moved on: Apple Wallet + the iOS app (alerts, Live Activity)
 
 // ---------- session (HMAC-signed cookie) ----------
 const mac = (b) => createHmac('sha256', SESSION_SECRET).update(b).digest('base64url');
@@ -170,7 +172,7 @@ async function markPaid(o, m) {
         where id=${n.id}::uuid returning alert_at <= now() as due`;
       now = !!r?.due; if (now) await sql`update orders set alerted=true where id=${n.id}::uuid`; // already due: alert now, not again later
     }
-    await Promise.allSettled([notifyPaid(n, m, now), afterPaid(n, m), W.pushUpdate(n.id)]).then((r) => r.forEach((x) => x.status === 'rejected' && console.error('markPaid', x.reason))); } // only the request that wins the update does this
+    await Promise.allSettled([notifyPaid(n, m, now), afterPaid(n, m), changed(n.id)]).then((r) => r.forEach((x) => x.status === 'rejected' && console.error('markPaid', x.reason))); } // only the request that wins the update does this
   return n;
 }
 
@@ -208,7 +210,7 @@ async function doRefund(o, mer, items) {
     if (n.stamped) await sql`update loyalty set stamps=greatest(stamps-${n.stamps_earned || 1},0) where merchant_id=${n.merchant_id} and email=${n.account}`;
     if (n.reward_used) await sql`update loyalty set stamps=stamps+${loyOut(mer.loyalty).needed} where merchant_id=${n.merchant_id} and email=${n.account}`;
   }
-  await notifyRefund(n, mer, amount); await W.pushUpdate(n.id);
+  await notifyRefund(n, mer, amount); await changed(n.id);
   return n;
 }
 const IMG = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
@@ -486,7 +488,7 @@ route('GET', '/api/orders/:id', async ({ p }) => {
   const [mer, brs, [review = null], [dp]] = await Promise.all([merchantById(o.merchant_id), branchesOf(o.merchant_id), // one round trip each, in parallel: this route is polled every few seconds
     sql`select stars, comment from reviews where order_id=${o.id}::uuid`, sql`select * from disputes where order_id=${o.id}::uuid order by created_at desc limit 1`]);
   const m = mer || { id: o.merchant_id, name: 'Closed café', color: null }, br = brs.find((x) => x.id === o.branch_id) || brs[0];
-  const { customer_email, push_sub, account, payment_id, fee, merchant_id, branch_id, printed_at, stamped, ...pub } = o;
+  const { customer_email, push_sub, app_push, account, payment_id, fee, merchant_id, branch_id, printed_at, stamped, ...pub } = o;
   const stale = Date.now() - new Date(o.created_at) > 45 * 60e3; // printer cafés never tick orders off, so allow a review after a while
   return { ...pub, dispute: dp ? await disputeOut(dp) : null, failed, reason, wallet: W.enabled() && !o.test, review, canReview: !review && (o.status === 'completed' || (br?.printer_on && stale && ['pending', 'accepted', 'ready'].includes(o.status))),
     estimate: !!br?.printer_on, cafe: { id: m.id, branchId: br?.id, name: m.name + (brs.length > 1 ? ' · ' + br.name : ''), color: m.color, address: br?.address || '', vat_number: m.vat_number } };
@@ -541,9 +543,16 @@ route('GET', '/api/orders/:id/wallet', async ({ res, p }) => {
   const o = await getOrder(p.id); sendPackage(res, o, await orderPackage(o));
 });
 
+// Web push subscription (PWA: body.sub), or the iOS app's APNs tokens (body.apns = { alert, activity, sandbox }: alerts + the order's Live Activity).
 route('POST', '/api/orders/:id/push', async ({ p, body }) => {
+  const o = await getOrder(p.id), b = body.apns;
+  if (b) {
+    const hex = (t) => (/^[0-9a-f]{32,400}$/i.test(t || '') ? t : null), n = { ...(o.app_push || {}), sandbox: !!b.sandbox };
+    if (hex(b.alert)) n.alert = b.alert; if (hex(b.activity)) n.activity = b.activity;
+    return void await sql`update orders set app_push=${JSON.stringify(n)}::jsonb where id=${o.id}::uuid`;
+  }
   if (!body.sub?.endpoint) throw bad('Invalid subscription');
-  await sql`update orders set push_sub=${JSON.stringify(body.sub)}::jsonb where id=${(await getOrder(p.id)).id}::uuid`;
+  await sql`update orders set push_sub=${JSON.stringify(body.sub)}::jsonb where id=${o.id}::uuid`;
 });
 
 route('POST', '/api/webhook/mollie', async ({ body }) => { // Mollie posts id=tr_xxx; we re-fetch, so forged calls are harmless
@@ -1073,7 +1082,7 @@ route('POST', '/api/m/orders/:id/status', async ({ m, p, body }) => {
   if (o.merchant_id !== m || NEXT[o.status] !== body.status) throw bad('Invalid status change');
   const [n] = await sql`update orders set status=${body.status}, updated_at=now() where id=${o.id}::uuid and status=${o.status} returning *`;
   if (n) { const mer = await merchantById(m), br = (await branchesOf(m)).find((x) => x.id === n.branch_id);
-    await Promise.allSettled([W.pushUpdate(n.id), n.status === 'accepted' ? notifyAccepted(n, mer) : n.status === 'ready' ? notifyReady(n, { ...mer, address: br?.address || '' }) : null]); }
+    await Promise.allSettled([changed(n.id), n.status === 'accepted' ? notifyAccepted(n, mer) : n.status === 'ready' ? notifyReady(n, { ...mer, address: br?.address || '' }) : null]); }
 }, true);
 
 // Refund the whole order, or just some items (body.items = [{ i: line index, qty }]). Money comes back from the MERCHANT's Mollie balance.
