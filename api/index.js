@@ -838,6 +838,12 @@ route('GET', '/api/admin/cafes', async ({ m }) => {
     from merchants m left join (select merchant_id, count(*)::int orders, sum(total)::int gmv, sum(fee)::int fees from orders where ${PAID} and created_at > now() - interval '30 days' group by 1) o on o.merchant_id=m.id
     left join (select merchant_id, count(*)::int n, avg(stars)::float a from reviews group by 1) r on r.merchant_id=m.id order by m.id desc`);
 }, true);
+route('GET', '/api/admin/cafes/:id/menu', async ({ m, p }) => { // read-only view of a café's live menu
+  await adminOnly(m);
+  const id = +p.id, [cafe] = await sql`select name from merchants where id=${id}`; if (!cafe) throw bad('Café not found', 404);
+  return { name: cafe.name, categories: await sql`select id, name, from_time, to_time, days from categories where merchant_id=${id} order by sort, id`,
+    items: await sql`select id, category_id, name, description, price_pence, available, alcohol, options, allergens, dietary from items where merchant_id=${id} order by id` };
+}, true);
 route('GET', '/api/admin/reviews', async ({ m }) => {
   await adminOnly(m);
   return sql`select r.order_id, r.stars, r.comment, r.created_at, m.name from reviews r join merchants m on m.id=r.merchant_id order by r.created_at desc limit 100`;
