@@ -549,7 +549,7 @@ async function checkoutView() {
 let qrTable = (new URLSearchParams(location.search).get('table') || '').slice(0, 20), svcPicked = false, tableMem = ''; // a table QR code opens the site with ?table=12; remembered for this visit only, never saved
 const stepsOf = (o) => (o.service === 'table' ? [['pending', 'Received'], ['accepted', 'Preparing'], ['ready', 'On its way'], ['completed', 'Served']] : STEPS);
 const STEPS = [['pending', 'Received'], ['accepted', 'Preparing'], ['ready', 'Ready'], ['completed', 'Collected']];
-// Sale -> GA4 `purchase` (value = total paid, incl. tip) plus a plain `docket_sale` event, once per order per device. A refund seen on the order -> GA4 `refund` for the newly refunded amount only.
+// Sale -> GA4 `purchase` (value = total paid, incl. tip) plus a plain `docket_sale` event, once per order per device. Refunds are reported only from the merchant dashboard.
 function trackOrder(o) {
   if (o.test || !['pending', 'accepted', 'ready', 'completed', 'refunded'].includes(o.status)) return;
   const items = o.items.map((i) => ({ item_name: i.name, price: i.unit / 100, quantity: i.qty }));
@@ -558,12 +558,6 @@ function trackOrder(o) {
     ls.set('sold', [...sold.slice(-49), o.id]);
     track('purchase', { transaction_id: o.id, value: o.total / 100, currency: 'GBP', tax: (o.vat || 0) / 100, shipping: 0, coupon: o.offer_code || undefined, affiliation: o.cafe.name, items });
     track('docket_sale', undefined, { order_id: o.id, sale_value: o.total / 100, currency: 'GBP', tip_value: (o.tip || 0) / 100, cafe_id: o.cafe.id, cafe_name: o.cafe.name, item_count: o.items.reduce((n, i) => n + i.qty, 0) });
-  }
-  const refunded = o.refunded || (o.status === 'refunded' ? o.total : 0), sent = ls.get('refunded', {});
-  if (refunded > (sent[o.id] || 0)) {
-    const value = (refunded - (sent[o.id] || 0)) / 100;
-    ls.set('refunded', Object.fromEntries([...Object.entries(sent), [o.id, refunded]].slice(-50)));
-    track('refund', { transaction_id: o.id, value, currency: 'GBP', affiliation: o.cafe.name });
   }
 }
 async function orderView(id) {
