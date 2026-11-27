@@ -281,6 +281,7 @@ function itemSheet(it) {
   const s = sheet(H`<h2>${it.id || it.draftId ? 'Edit' : 'New'} item</h2><div class="group">
     <label class="row"><span>Name</span><input id="n" value="${it.name || ''}"></label>
     <label class="row"><span>Price (£)</span><input id="p" type="number" step="0.01" min="0" inputmode="decimal" value="${it.price_pence != null ? (it.price_pence / 100).toFixed(2) : ''}"></label>
+    <div class="sub" style="padding:0 16px 8px">Pence must end in 0 or 5 (e.g. £2.00 or £1.85, not £2.99).</div>
     <label class="row"><span>Category</span><select id="c">${menu.categories.map((c) => H`<option value="${c.id}" ${!it.category_draft && c.id === it.category_id ? H`selected` : ''}>${c.name}</option>`)}${dcats.map((c) => H`<option value="d${c.id}" ${c.id === it.category_draft ? H`selected` : ''}>${c.data.name} (draft)</option>`)}</select></label>
     <label class="row"><span class="grow">Available</span><input type="checkbox" class="sw" id="a" ${it.available !== false ? H`checked` : ''}></label>
     ${me.alcohol?.ok ? H`<label class="row"><span class="grow">Contains alcohol<div class="sub">Marks it Restricted: table service only. Docket also spots alcoholic items automatically.</div></span><input type="checkbox" class="sw" id="alc" ${it.alcohol ? H`checked` : ''}></label>` : ''}</div>
