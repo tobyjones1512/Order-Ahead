@@ -183,6 +183,7 @@ async function menuView() {
   shell('Menu', H`<div class="spin"></div>`);
   menu = await api('/m/menu'); drawMenu();
 }
+let chOpen = false; // Menu changes list collapsed by default
 let mb = 0; // 0 = edit the shared menu; otherwise the branch whose availability is being set
 const isOff = (kind, id) => menu.off.some((r) => r.branch_id === mb && r.kind === kind && r.ref_id === id);
 // Drafts show as normal items/categories (with a Draft badge), replacing the live version they edit; tap to keep editing until they're sent for review.
@@ -196,9 +197,9 @@ function drawMenu() {
   shell('Menu', H`${brs().length > 1 ? H`<div class="chips" id="mbs" style="margin-top:12px"><button class="chip ${mb ? '' : 'on'}" data-b="0">Edit menu</button>${brs().map((x) => H`<button class="chip ${mb === x.id ? 'on' : ''}" data-b="${x.id}">${x.name}</button>`)}</div>
       ${mb ? H`<div class="banner"><span class="grow">Choose what <b>${brs().find((x) => x.id === mb).name}</b> sells. Switched-off items and categories are hidden from customers at this branch only.</span></div>` : ''}` : ''}
     ${!mb && !me.table_service && menu.items.some((i) => i.alcohol) ? H`<div class="banner" style="margin-top:12px">Your restricted (alcohol) items are hidden from customers because Table service is off. Switch it on in Settings to sell them.</div>` : ''}
-    ${mb || !menu.changes?.length ? '' : H`<h3>Menu changes</h3><div class="group">${menu.changes.map((c) => H`<div class="row"><div class="grow"><div class="t">${c.name}</div>${c.status === 'restricted' ? H`<div class="d">${c.reason}</div>` : c.status === 'refused' ? H`<div class="d">${c.rule ? 'Breaks ' + c.rule.id + ' ' + c.rule.title + '. ' : ''}${c.reason}</div>` : c.status === 'in_review' && c.reason ? H`<div class="d">${c.reason}. We’ll keep trying, or tap Retry.</div>` : ''}</div>
+    ${mb || !menu.changes?.length ? '' : H`<h3><button data-a="togglech" aria-expanded="${chOpen}" style="font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit">Menu changes (${menu.changes.length}) ${chOpen ? '▾' : '▸'}</button></h3>${chOpen ? H`<div class="group">${[...menu.changes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id).map((c) => H`<div class="row"><div class="grow"><div class="t">${c.name}</div>${c.status === 'restricted' ? H`<div class="d">${c.reason}</div>` : c.status === 'refused' ? H`<div class="d">${c.rule ? 'Breaks ' + c.rule.id + ' ' + c.rule.title + '. ' : ''}${c.reason}</div>` : c.status === 'in_review' && c.reason ? H`<div class="d">${c.reason}. We’ll keep trying, or tap Retry.</div>` : ''}</div>
       ${c.status === 'draft' ? H`<button style="color:var(--text);text-decoration:underline;margin-right:10px" data-a="discard" data-id="${c.id}">Discard</button>` : ''}
-      <span class="badge ${c.status === 'accepted' ? 'ok' : c.status === 'refused' || c.status === 'restricted' ? 'warn' : ''}">${{ draft: 'Draft', in_review: 'In Review', accepted: 'Accepted', restricted: 'Restricted', refused: 'Refused' }[c.status]}</span></div>`)}</div>
+      <span class="badge ${c.status === 'accepted' ? 'ok' : c.status === 'refused' || c.status === 'restricted' ? 'warn' : ''}">${{ draft: 'Draft', in_review: 'In Review', accepted: 'Accepted', restricted: 'Restricted', refused: 'Refused' }[c.status]}</span></div>`)}</div>` : ''}
       ${menu.changes.some((c) => c.status === 'draft') ? H`<div style="padding-top:12px"><button class="btn" data-a="senddrafts">Send ${menu.changes.filter((c) => c.status === 'draft').length} draft change(s) for review</button></div>` : menu.changes.some((c) => c.status === 'in_review') ? H`<div style="padding-top:12px"><button class="btn sec" data-a="senddrafts">Retry review</button></div>` : ''}`}
     <div style="padding-top:12px">${mb ? '' : H`<button class="btn sec" data-a="newcat">Add category</button>`}</div>
     ${cats.map((c) => H`<h3 style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>${c.name}${c.draftId ? draftBadge : ''}${c.from_time || c.to_time ? ` · ${c.from_time || '00:00'} to ${c.to_time || '24:00'}` : ''}${c.days.length < 7 ? ' · ' + c.days.map((d) => DAYS[d]).join(' ') : ''}</span>
@@ -213,6 +214,7 @@ app.addEventListener('click', (e) => {
   const b = e.target.closest('[data-a]'); if (!b || !menu || tab() !== 'menu') return;
   const id = +b.dataset.id, a = b.dataset.a;
   if (a === 'senddrafts') { b.disabled = true; toast('Reviewing your changes...'); api('/m/menu/submit', {}).then((r) => { toast(r.in_review ? 'Some changes are still In Review. We’ll email you the result.' : `Reviewed: ${r.accepted} accepted${r.restricted ? ', ' + r.restricted + ' restricted' : ''}, ${r.refused} refused. We’ve emailed you the result.`); menuView(); }, (x) => { toast(x.message); menuView(); }); }
+  if (a === 'togglech') { chOpen = !chOpen; return drawMenu(); }
   if (a === 'discard') api('/m/menu/drafts/' + id, null, 'DELETE').then(menuView, (x) => toast(x.message));
   if (a === 'editcatdraft') catSheet({ ...menu.changes.find((c) => c.id === id).data, draftId: id });
   if (a === 'edititemdraft') { const d = menu.changes.find((c) => c.id === id).data; itemSheet({ ...d, price_pence: d.price, draftId: id }); }
@@ -281,7 +283,7 @@ function itemSheet(it) {
   const s = sheet(H`<h2>${it.id || it.draftId ? 'Edit' : 'New'} item</h2><div class="group">
     <label class="row"><span>Name</span><input id="n" value="${it.name || ''}"></label>
     <label class="row"><span>Price (£)</span><input id="p" type="number" step="0.01" min="0" inputmode="decimal" value="${it.price_pence != null ? (it.price_pence / 100).toFixed(2) : ''}"></label>
-    <div class="sub" style="padding:0 16px 8px">Pence must end in 0 or 5 (e.g. £2.00 or £1.85, not £2.99).</div>
+    <div class="sub" style="padding:0 16px 8px;font-size:11px">Pence must end in 0 or 5 (e.g. £2.00 or £1.85, not £2.99).</div>
     <label class="row"><span>Category</span><select id="c">${menu.categories.map((c) => H`<option value="${c.id}" ${!it.category_draft && c.id === it.category_id ? H`selected` : ''}>${c.name}</option>`)}${dcats.map((c) => H`<option value="d${c.id}" ${c.id === it.category_draft ? H`selected` : ''}>${c.data.name} (draft)</option>`)}</select></label>
     <label class="row"><span class="grow">Available</span><input type="checkbox" class="sw" id="a" ${it.available !== false ? H`checked` : ''}></label>
     ${me.alcohol?.ok ? H`<label class="row"><span class="grow">Contains alcohol<div class="sub">Marks it Restricted: table service only. Docket also spots alcoholic items automatically.</div></span><input type="checkbox" class="sw" id="alc" ${it.alcohol ? H`checked` : ''}></label>` : ''}</div>
