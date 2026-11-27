@@ -141,7 +141,11 @@ function refundSheet(o) {
   const go = async (items) => {
     if (items && !items.length) return toast('Choose at least one item');
     $$('button', sh.el).forEach((b) => (b.disabled = true));
-    try { await api(`/m/orders/${o.id}/refund`, items ? { items } : {}); try { window.dataLayer = window.dataLayer || []; window.dataLayer.push({ event: 'docket_refund', order_id: o.id, partial: !!items, order_value: o.total / 100, currency: 'GBP' }); } catch {} toast('Refunded'); sh.close(); await poll(); } catch (x) { toast(x.message); $$('button', sh.el).forEach((b) => (b.disabled = false)); }
+    try { await api(`/m/orders/${o.id}/refund`, items ? { items } : {}); if (!o.test) try { // GA4 `refund`: whole order = what was left; partial = the chosen items
+      const rows = items ? items.map((x) => ({ item_name: o.items[x.i].name, price: o.items[x.i].unit / 100, quantity: x.qty })) : null, value = items ? items.reduce((n, x) => n + o.items[x.i].unit * x.qty, 0) : o.items.reduce((n, l, i) => n + l.unit * left[i], 0);
+      window.dataLayer = window.dataLayer || []; window.dataLayer.push({ ecommerce: null }, { event: 'refund', ecommerce: { transaction_id: o.id, value: value / 100, currency: 'GBP', ...(rows && { items: rows }) } });
+    } catch {}
+    toast('Refunded'); sh.close(); await poll(); } catch (x) { toast(x.message); $$('button', sh.el).forEach((b) => (b.disabled = false)); }
   };
   $('#rpart', sh.el).onclick = () => go($$('[data-rq]', sh.el).map((s) => ({ i: +s.dataset.rq, qty: +s.value })).filter((x) => x.qty > 0));
   $('#rall', sh.el).onclick = () => { if (confirm('Refund everything that’s left on this order?')) go(null); };
