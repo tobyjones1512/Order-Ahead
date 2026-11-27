@@ -1,5 +1,9 @@
 import { H, gbp, $, $$, ls, api, toast, sheet, loadScript, toPhoto, registerSW, setAccent, barcode, onColor, stars } from './ui.js';
 import { priceLine, totals, catAvailable, londonNow, toMins, discountFor } from './pricing.js';
+// GA4 ecommerce events -> GTM dataLayer. Money is in pounds. Test-mode orders are never reported as sales.
+const track = (event, ecommerce, extra = {}) => { window.dataLayer = window.dataLayer || []; window.dataLayer.push({ ecommerce: null }, { event, ecommerce, ...extra }); };
+const gaItem = (it, sel, qty = 1) => { const p = priceLine(it, sel); return { item_id: String(it.id), item_name: it.name, item_category: it.cat?.name, item_variant: p.names.join(', ') || undefined, price: p.unit / 100, quantity: qty }; };
+const gaCart = (lines) => { const items = lines.map((l) => gaItem(itemOf(l.id), l.sel, l.qty)); return { currency: 'GBP', value: items.reduce((n, i) => n + i.price * i.quantity, 0), items }; };
 import { itemAllergens, allergenText, ALLERGENS, DIETARY } from '/allergens.js';
 
 registerSW();
@@ -55,7 +59,7 @@ function addToCart(it, sel, qty) {
   }
   const l = cart.lines.find((x) => x.id === it.id && sk(x.sel) === sk(sel));
   if (l) l.qty = Math.min(20, l.qty + qty); else cart.lines.push({ id: it.id, sel, qty });
-  save(); return true;
+  save(); try { const i = gaItem(it, sel, qty); track('add_to_cart', { currency: 'GBP', value: i.price * qty, items: [i] }); } catch {} return true;
 }
 
 // ---------- favourites (stored on device, include customisations) ----------
@@ -111,7 +115,7 @@ app.addEventListener('click', async (e) => {
       if (!j.result) throw 0; ls.set('pos', { lat: j.result.latitude, lng: j.result.longitude }); homeView();
     } catch { toast('Postcode not found'); }
   }
-  if (a === 'qty') { const l = cart.lines[+b.dataset.i]; l.qty += +b.dataset.d; cart.lines = cart.lines.filter((x) => x.qty > 0); save(); drawCart(); }
+  if (a === 'qty') { const l = cart.lines[+b.dataset.i]; if (+b.dataset.d < 0) try { const i = gaItem(itemOf(l.id), l.sel, 1); track('remove_from_cart', { currency: 'GBP', value: i.price, items: [i] }); } catch {} l.qty += +b.dataset.d; cart.lines = cart.lines.filter((x) => x.qty > 0); save(); drawCart(); }
   if (a === 'favcafe') { // heart on a home/favourites row (that one branch) or on the café page
     const id = +b.dataset.id, br = +b.dataset.br, home = !!$('#saved'), fv = !!$('#favlist');
     const c = home ? window.findCafe(id, br) : fv ? favCafes.find((x) => favMatch(x, id, br)) : { id, branchId: br, name: cafe.name, branch: cafe.branchName, many: !!cafe.branchName, address: cafe.address, color: cafe.color, logo: cafe.logo };
@@ -331,6 +335,7 @@ app.addEventListener('click', (e) => { const b = e.target.closest('[data-item]')
 function openItem(it) {
   const sel = {}; it.options.forEach((g, gi) => { const want = g.choices.flatMap((c, ci) => (isDefault(c.name) ? [ci] : [])); sel[gi] = g.multi ? want : [want[0] ?? 0]; }); // saved defaults (Settings) preselect matching choices
   let qty = 1;
+  try { const i = gaItem(it, sel); track('view_item', { currency: 'GBP', value: i.price, items: [i] }); } catch {}
   const s = sheet(H``);
   const draw = () => {
     const { unit } = priceLine(it, sel), fav = isFav(it.id, sel);
@@ -365,6 +370,7 @@ function openItem(it) {
 async function cartView() {
   if (!cart.cafeId) { app.innerHTML = H`${nav('Basket', '#/')}<div class="empty">Your basket is empty</div>`.raw; return; }
   await loadCafe(cart.cafeId); cleanCart(); drawCart();
+  try { if (cart.lines.length) track('view_cart', gaCart(cart.lines)); } catch {}
 }
 function drawCart() {
   if (!cart.lines.length) { app.innerHTML = H`${nav('Basket', '#/')}<div class="empty">Your basket is empty</div>`.raw; return; }
@@ -381,6 +387,7 @@ async function checkoutView() {
   if (!cart.lines.length) return (location.hash = '#/');
   await loadCafe(cart.cafeId); cleanCart();
   if (!cart.lines.length) return (location.hash = '#/');
+  try { track('begin_checkout', gaCart(cart.lines)); } catch {}
   const me = ls.get('me', { name: '', email: '' });
   let pickup = cafe.asap ? 'asap' : cafe.slots[0], tip = 5, custom = false, customPence = 0;
   let service = cafe.sitin || cafe.tables ? ls.get('svc', 'takeaway') : 'takeaway', tableNo = tableMem || qrTable, tipTouched = false, offerOk = null, loy = null, useReward = false, tellKitchen = true, placed = null;
@@ -503,6 +510,7 @@ async function checkoutView() {
   }
   $('#pay').onclick = async () => {
     const d = details(); if (!d) return;
+    try { track('add_payment_info', { ...gaCart(cart.lines), payment_type: cafe.test ? 'Test' : 'Card' }); } catch {}
     $('#pay').disabled = true; $('#pay').textContent = 'Processing…';
     try {
       let token; if (!cafe.test && tot().total > 0) { const r0 = await mollie.createToken(); if (r0.error) throw new Error(r0.error.message); token = r0.token; }
@@ -532,6 +540,7 @@ async function checkoutView() {
         location.hash = '#/o/' + o.id;
       } catch (err) { s.completePayment(ApplePaySession.STATUS_FAILURE); toast(err.message); }
     };
+    try { track('add_payment_info', { ...gaCart(cart.lines), payment_type: 'Apple Pay' }); } catch {}
     s.begin();
   };
 }
@@ -540,11 +549,29 @@ async function checkoutView() {
 let qrTable = (new URLSearchParams(location.search).get('table') || '').slice(0, 20), svcPicked = false, tableMem = ''; // a table QR code opens the site with ?table=12; remembered for this visit only, never saved
 const stepsOf = (o) => (o.service === 'table' ? [['pending', 'Received'], ['accepted', 'Preparing'], ['ready', 'On its way'], ['completed', 'Served']] : STEPS);
 const STEPS = [['pending', 'Received'], ['accepted', 'Preparing'], ['ready', 'Ready'], ['completed', 'Collected']];
+// Sale -> GA4 `purchase` (value = total paid, incl. tip) plus a plain `docket_sale` event, once per order per device. A refund seen on the order -> GA4 `refund` for the newly refunded amount only.
+function trackOrder(o) {
+  if (o.test || !['pending', 'accepted', 'ready', 'completed', 'refunded'].includes(o.status)) return;
+  const items = o.items.map((i) => ({ item_name: i.name, price: i.unit / 100, quantity: i.qty }));
+  const sold = ls.get('sold', []);
+  if (!sold.includes(o.id)) {
+    ls.set('sold', [...sold.slice(-49), o.id]);
+    track('purchase', { transaction_id: o.id, value: o.total / 100, currency: 'GBP', tax: (o.vat || 0) / 100, shipping: 0, coupon: o.offer_code || undefined, affiliation: o.cafe.name, items });
+    track('docket_sale', undefined, { order_id: o.id, sale_value: o.total / 100, currency: 'GBP', tip_value: (o.tip || 0) / 100, cafe_id: o.cafe.id, cafe_name: o.cafe.name, item_count: o.items.reduce((n, i) => n + i.qty, 0) });
+  }
+  const refunded = o.refunded || (o.status === 'refunded' ? o.total : 0), sent = ls.get('refunded', {});
+  if (refunded > (sent[o.id] || 0)) {
+    const value = (refunded - (sent[o.id] || 0)) / 100;
+    ls.set('refunded', Object.fromEntries([...Object.entries(sent), [o.id, refunded]].slice(-50)));
+    track('refund', { transaction_id: o.id, value, currency: 'GBP', affiliation: o.cafe.name });
+  }
+}
 async function orderView(id) {
   let shown = null;
   app.innerHTML = H`${nav('Order', '#/orders')}<div class="spin"></div>`.raw;
   const draw = async () => {
     const o = await api('/orders/' + id);
+    try { trackOrder(o); } catch {}
     setAccent(o.cafe.color);
     if (o.status !== 'awaiting_payment') {
       if (cart.cafeId === o.cafe.id) { cart = { cafeId: null, lines: [] }; }

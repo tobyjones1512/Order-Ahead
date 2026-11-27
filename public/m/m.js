@@ -141,7 +141,7 @@ function refundSheet(o) {
   const go = async (items) => {
     if (items && !items.length) return toast('Choose at least one item');
     $$('button', sh.el).forEach((b) => (b.disabled = true));
-    try { await api(`/m/orders/${o.id}/refund`, items ? { items } : {}); toast('Refunded'); sh.close(); await poll(); } catch (x) { toast(x.message); $$('button', sh.el).forEach((b) => (b.disabled = false)); }
+    try { await api(`/m/orders/${o.id}/refund`, items ? { items } : {}); try { window.dataLayer = window.dataLayer || []; window.dataLayer.push({ event: 'docket_refund', order_id: o.id, partial: !!items, order_value: o.total / 100, currency: 'GBP' }); } catch {} toast('Refunded'); sh.close(); await poll(); } catch (x) { toast(x.message); $$('button', sh.el).forEach((b) => (b.disabled = false)); }
   };
   $('#rpart', sh.el).onclick = () => go($$('[data-rq]', sh.el).map((s) => ({ i: +s.dataset.rq, qty: +s.value })).filter((x) => x.qty > 0));
   $('#rall', sh.el).onclick = () => { if (confirm('Refund everything that’s left on this order?')) go(null); };
